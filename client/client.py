@@ -12,14 +12,14 @@ class Client:
         self.server_port = server_port
         self.user_name = ''
         self.name_size = 0
-        
+
     def start(self):
         self.create_user()
         thread_send = threading.Thread(target=self.send_message, daemon=True)
         thread_send.start()
         thread_recieve_message = threading.Thread(target=self.receive_message, daemon=True)
         thread_recieve_message.start()  
-    
+
     def create_user(self):
         while True:
             user_name = input('Enter your name: ')
@@ -29,7 +29,7 @@ class Client:
             self.name_size = len(user_name)
             self.user_name = user_name
             break
-        
+
     def send_message(self):
         try:
             print('Enter your message')
@@ -44,7 +44,7 @@ class Client:
         finally:
             print('socket closig....')
             self.client_sock.close()
-    
+
     def message_encode(self, message:str):
         # 最初の1バイトをユーザー名のサイズとして作成して、その後にユーザ名、メッセージのプロンプトにする関数
         # サーバーは最初の1バイト(ユーザー名のサイズ)を読み込んでユーザー名を特定し、ユーザー名とメッセージを受信することができるようにする。
@@ -52,7 +52,7 @@ class Client:
         name_byte      = self.user_name.encode('utf-8')
         message_byte   = message.encode('utf-8')
         return name_len_byte + name_byte + message_byte
-    
+
     def receive_message(self):
         try:
             while True:    
