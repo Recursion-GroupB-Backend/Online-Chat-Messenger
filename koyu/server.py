@@ -1,10 +1,14 @@
 import socket
 import threading
 import time
+import struct
+import json
 
 class Server:
     TIME_OUT = 60
-    def __init__(self, tcp_address = "127.0.0.1", udp_address = "127.0.0.1"):
+    HEADER_MAX_BITE = 32
+
+    def __init__(self, tcp_address = "0.0.0.0", udp_address = "0.0.0.0"):
         self.tcp_address = tcp_address
         self.udp_address = udp_address
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -17,13 +21,79 @@ class Server:
         self.TIMEOUT = 60
 
     def start(self):
-        # 同時にメッセージ受信とクライアントのタイムアウト監視を行うことで効率的な並行処理が可能になる。
-        thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
-        thread_check_timeout.start()
-        thread_recieve_message = threading.Thread(target=self.recieve_message, daemon=True)
-        thread_recieve_message.start()
+        thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
+        thread_handle_tcp.start()
+        # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
+        # thread_check_timeout.start()
+        # thread_receive_message = threading.Thread(target=self.receive_message, daemon=True)
+        # thread_receive_message.start()
 
-    def recieve_message(self):
+
+    def wait_to_tcp_connections(self):
+        self.tcp_socket.listen(1)
+        while True:
+            print('\nwaiting to receive tcp connect')
+            client_socket, addr = self.tcp_socket.accept()
+            thread = threading.Thread(target=self.establish_tcp_connect, args=(client_socket,))
+            thread.start()
+
+    def establish_tcp_connect(self, client_socket):
+        try:
+            room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
+
+            print("Room Name:", room_name)
+            print("User Name:", user_name)
+            print("Operation:", operation)
+            print("State:", state)
+            print("Payload:", payload)
+
+            # TODO: User生成
+
+            # TODO:  チャットルーム生成・ユーザーの追加
+
+            # TCPレスポンスを返す
+            token = "abcdefg"
+            self.send_response(client_socket, operation, 2, 200, token)
+
+
+        except Exception as e:
+            print("Error in receive_tcp_message:", e)
+
+    def send_response(self, client_socket, operation, state, status_code, token):
+        """クライアントにレスポンスを送信する"""
+        try:
+            payload = {
+                "status": status_code,
+                "token": token
+            }
+
+            payload_json = json.dumps(payload)
+            payload_bytes = payload_json.encode('utf-8')
+
+            # ヘッダーの作成
+            header = struct.pack('!B B B 29s', 0, operation, state, len(payload_bytes).to_bytes(29, 'big'))
+
+            client_socket.sendall(header + payload_bytes)
+
+        except Exception as e:
+            print(f"Error in send_response: {e}")
+
+        finally:
+            print('tcp socket closig....')
+            self.tcp_socket.close()
+
+
+    def receive_tcp_message(self, client_socket):
+        """TCPメッセージのヘッダーとペイロードを受信"""
+        header = client_socket.recv(self.HEADER_MAX_BITE)
+        room_name_size, operation, state, payload_size = struct.unpack('!B B B 29s', header)
+        payload = client_socket.recv(int.from_bytes(payload_size, 'big'))
+        room_name = payload[:room_name_size].decode('utf-8')
+        user_name = payload[room_name_size:].decode('utf-8')
+
+        return room_name, user_name, operation, state, payload
+
+    def receive_message(self):
         try:
             while True:
                 print('\nwaiting to receive message')
