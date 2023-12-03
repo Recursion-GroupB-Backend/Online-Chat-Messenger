@@ -1,5 +1,5 @@
-from enum import Enum
+from enum import IntEnum
 
-class Operation(Enum):
+class Operation(IntEnum):
     CREATE_ROOM = 1
     JOIN_ROOM = 2

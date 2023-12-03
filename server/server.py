@@ -5,7 +5,9 @@ import struct
 import json
 import secrets
 from constants.operation import Operation
+from constants.member_type import MemberType
 from server.user import User
+
 
 
 class Server:
@@ -56,16 +58,18 @@ class Server:
 
             user = self.create_user(user_name, addr, operation)
 
-            print(user)
+            print(user.user_name)
+            print(user.address)
+            print(user.member_type)
 
             # TODO operationの値によって処理を分岐
             if Operation.CREATE_ROOM:
-                self.create_room()
+                self.create_room(user)
             elif Operation.JOIN_ROOM:
-                self.join_room()
+                self.join_room(user)
 
             # TCPレスポンスを返す
-            self.send_response(client_socket, operation, 2, 200, token)
+            self.send_response(client_socket, operation, 2, 200, user.token)
 
 
         except Exception as e:
@@ -139,7 +143,7 @@ class Server:
             user_name,
             address,
             self.generate_token(),
-            'host' if operation == Operation.CREATE_ROOM else 'member'
+            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
         )
 
     def join_room():
