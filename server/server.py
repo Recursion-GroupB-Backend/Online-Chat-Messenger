@@ -5,6 +5,7 @@ import struct
 import json
 import secrets
 from constants.operation import Operation
+from server.user import User
 
 
 class Server:
@@ -38,10 +39,10 @@ class Server:
         while True:
             print('\nwaiting to receive tcp connect')
             client_socket, addr = self.tcp_socket.accept()
-            thread = threading.Thread(target=self.establish_tcp_connect, args=(client_socket,))
+            thread = threading.Thread(target=self.establish_tcp_connect, args=(client_socket, addr,))
             thread.start()
 
-    def establish_tcp_connect(self, client_socket):
+    def establish_tcp_connect(self, client_socket, addr):
         try:
             room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
 
@@ -53,8 +54,9 @@ class Server:
             print("Payload:", payload)
             print("-------- receive request value end ---------")
 
-            token =  self.generate_token()
-            user = self.create_user()
+            user = self.create_user(user_name, addr, operation)
+
+            print(user)
 
             # TODO operationの値によって処理を分岐
             if Operation.CREATE_ROOM:
@@ -132,9 +134,13 @@ class Server:
         # TODO チャットルーム作成
         print("create room")
 
-    def create_user():
-        # TODO ユーザー生成
-        print("create room")
+    def create_user(self, user_name, address, operation):
+        return User(
+            user_name,
+            address,
+            self.generate_token(),
+            'host' if operation == Operation.CREATE_ROOM else 'member'
+        )
 
     def join_room():
         # TODO チャットルームに参加
