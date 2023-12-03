@@ -3,10 +3,18 @@ import threading
 import time
 import struct
 import json
+import secrets
+from enum import Enum
+
+
+class Operation(Enum):
+    CREATE_ROOM = 1
+    JOIN_ROOM = 2
 
 class Server:
     TIME_OUT = 60
     HEADER_MAX_BITE = 32
+    TOKEN_MAX_BITE = 128
 
     def __init__(self, tcp_address = "0.0.0.0", udp_address = "0.0.0.0"):
         self.tcp_address = tcp_address
@@ -41,18 +49,24 @@ class Server:
         try:
             room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
 
+            print("-------- receive request value   -----------")
             print("Room Name:", room_name)
             print("User Name:", user_name)
             print("Operation:", operation)
             print("State:", state)
             print("Payload:", payload)
+            print("-------- receive request value end ---------")
 
-            # TODO: User生成
+            token =  self.generate_token()
 
-            # TODO:  チャットルーム生成・ユーザーの追加
+            # TODO operationの値によって処理を分岐
+            # if Operation.CREATE_ROOM:
+            #     self.create_room()
+            # elif Operation.JOIN_ROOM:
+            #     self.join_room()
 
             # TCPレスポンスを返す
-            token = "abcdefg"
+
             self.send_response(client_socket, operation, 2, 200, token)
 
 
@@ -92,6 +106,9 @@ class Server:
         user_name = payload[room_name_size:].decode('utf-8')
 
         return room_name, user_name, operation, state, payload
+
+    def generate_token(self):
+        return secrets.token_hex(self.TOKEN_MAX_BITE)
 
     def receive_message(self):
         try:
