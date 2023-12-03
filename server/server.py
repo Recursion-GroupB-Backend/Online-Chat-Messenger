@@ -7,6 +7,7 @@ import secrets
 from constants.operation import Operation
 from constants.member_type import MemberType
 from server.user import User
+from server.chat_room import ChatRoom
 
 
 
@@ -58,24 +59,19 @@ class Server:
 
             user = self.create_user(user_name, addr, operation)
 
-            print(user.user_name)
-            print(user.address)
-            print(user.member_type)
-
-            # TODO operationの値によって処理を分岐
             if Operation.CREATE_ROOM:
-                self.create_room(user)
+                self.create_room(user, room_name)
             elif Operation.JOIN_ROOM:
                 self.join_room(user)
 
             # TCPレスポンスを返す
-            self.send_response(client_socket, operation, 2, 200, user.token)
+            self.send_tcp_response(client_socket, operation, 2, 200, user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_response(self, client_socket, operation, state, status_code, token):
+    def send_tcp_response(self, client_socket, operation, state, status_code, token):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
@@ -134,9 +130,11 @@ class Server:
             print('socket closig....')
             self.udp_socket.close()
 
-    def create_room():
-        # TODO チャットルーム作成
-        print("create room")
+    def create_room(self, user, room_name):
+        chat_room = ChatRoom(room_name)
+        chat_room.add_user(user)
+        self.rooms[room_name] = chat_room
+
 
     def create_user(self, user_name, address, operation):
         return User(
