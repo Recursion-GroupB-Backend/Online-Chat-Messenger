@@ -4,12 +4,8 @@ import time
 import struct
 import json
 import secrets
-from enum import Enum
+from constants.operation import Operation
 
-
-class Operation(Enum):
-    CREATE_ROOM = 1
-    JOIN_ROOM = 2
 
 class Server:
     TIME_OUT = 60
@@ -58,15 +54,15 @@ class Server:
             print("-------- receive request value end ---------")
 
             token =  self.generate_token()
+            user = self.create_user()
 
             # TODO operationの値によって処理を分岐
-            # if Operation.CREATE_ROOM:
-            #     self.create_room()
-            # elif Operation.JOIN_ROOM:
-            #     self.join_room()
+            if Operation.CREATE_ROOM:
+                self.create_room()
+            elif Operation.JOIN_ROOM:
+                self.join_room()
 
             # TCPレスポンスを返す
-
             self.send_response(client_socket, operation, 2, 200, token)
 
 
@@ -93,7 +89,7 @@ class Server:
             print(f"Error in send_response: {e}")
 
         finally:
-            print('tcp socket closig....')
+            print('tcp socket closing....')
             self.tcp_socket.close()
 
 
@@ -131,6 +127,18 @@ class Server:
         finally:
             print('socket closig....')
             self.udp_socket.close()
+
+    def create_room():
+        # TODO チャットルーム作成
+        print("create room")
+
+    def create_user():
+        # TODO ユーザー生成
+        print("create room")
+
+    def join_room():
+        # TODO チャットルームに参加
+        print("join room")
 
     def broadcast(self, message:bytes, self_address=None):
         for address in self.clients:
