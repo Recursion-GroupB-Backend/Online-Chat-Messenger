@@ -31,6 +31,8 @@ class Server:
     def start(self):
         thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
         thread_handle_tcp.start()
+
+        # TODO: UDP通信や他の要件はissue毎にコメント外していく
         # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
         # thread_check_timeout.start()
         # thread_receive_message = threading.Thread(target=self.receive_message, daemon=True)
@@ -57,12 +59,12 @@ class Server:
             print("Payload:", payload)
             print("-------- receive request value end ---------")
 
-            user = self.create_user(user_name, addr, operation)
+            user = self.create_user(user_name, addr, operation) 
 
             if operation == Operation.CREATE_ROOM.value:
                 self.create_room(user, room_name)
             elif operation == Operation.JOIN_ROOM.value:
-                self.join_room(user)
+                self.join_room(user, room_name)
 
             # TCPレスポンスを返す
             self.send_tcp_response(client_socket, operation, 2, 200, user.token)
