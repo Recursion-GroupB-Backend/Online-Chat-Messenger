@@ -59,9 +59,9 @@ class Server:
 
             user = self.create_user(user_name, addr, operation)
 
-            if Operation.CREATE_ROOM:
+            if operation == Operation.CREATE_ROOM.value:
                 self.create_room(user, room_name)
-            elif Operation.JOIN_ROOM:
+            elif operation == Operation.JOIN_ROOM.value:
                 self.join_room(user)
 
             # TCPレスポンスを返す
