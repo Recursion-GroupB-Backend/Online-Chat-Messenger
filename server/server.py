@@ -21,7 +21,7 @@ class Server:
                 print('\nwaiting to receive message')
                 # データの取得（データを受け取るまで処理は止まる）
                 data, address = self.server_sock.recvfrom(4096)
-                
+
                 # 取得データを適切に処理
                 username_len = int.from_bytes(data[:1], byteorder='big')
                 username = data[1:1 + username_len].decode('utf-8')
@@ -32,7 +32,7 @@ class Server:
 
                 # 接続されている全てのクライアントにメッセージを送信
                 self.broadcast(message_for_send.encode('utf-8'), address)
-        
+
         finally:
             print('socket closig....')
             self.server_sock.close()
@@ -44,7 +44,7 @@ class Server:
                 pass
             else:
                 self.server_sock.sendto(message, address)
-            
+
     def check_client_timeout(self):
         try:
             while True:
@@ -60,12 +60,12 @@ class Server:
         finally:
             print('socket closig....')
             self.server_sock.close()
-    
+
     def shutdown(self):
         print("Server is shutting down.")
         self.server_sock.close()
         # その他のクリーンアップ処理があればここに追加
-    
+
 if __name__ == "__main__":
     server = Server()
     server.start()

@@ -18,7 +18,7 @@ class Client:
         thread_send = threading.Thread(target=self.send_message, daemon=True)
         thread_send.start()
         thread_recieve_message = threading.Thread(target=self.receive_message, daemon=True)
-        thread_recieve_message.start()  
+        thread_recieve_message.start()
 
     def create_user(self):
         while True:
@@ -55,7 +55,7 @@ class Client:
 
     def receive_message(self):
         try:
-            while True:    
+            while True:
                 message, _ = self.client_sock.recvfrom(4096)
                 print(message.decode('utf-8'))
         finally:
