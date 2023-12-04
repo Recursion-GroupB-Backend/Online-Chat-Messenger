@@ -16,6 +16,15 @@ class Server:
     HEADER_MAX_BITE = 32
     TOKEN_MAX_BITE = 128
 
+    STATUS_MESSAGE = {
+        200: 'Successfully joined a chat room',
+        201: 'Successfully create a chat room',
+        202: 'Server accpeted your request',
+        401: 'Token or room password is invalid',
+        404: 'Requested chat room does not exist',
+        409: 'Requested room name or username already exists',
+    }
+
     def __init__(self, tcp_address = "0.0.0.0", udp_address = "0.0.0.0"):
         self.tcp_address = tcp_address
         self.udp_address = udp_address
@@ -59,25 +68,31 @@ class Server:
             print("Payload:", payload)
             print("-------- receive request value end ---------")
 
-            user = self.create_user(user_name, addr, operation) 
+            user = self.create_user(user_name, addr, operation)
 
+            operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
-                self.create_room(user, room_name)
+                operation_response = self.create_room(user, room_name)
             elif operation == Operation.JOIN_ROOM.value:
-                self.join_room(user, room_name)
+                operation_response = self.join_room(user, room_name)
+
+            print("-------- operation response start   -----------")
+            print(operation_response)
+            print("-------- operation response end   -----------")
 
             # TCPレスポンスを返す
-            self.send_tcp_response(client_socket, operation, 2, 200, user.token)
+            self.send_tcp_response(client_socket, operation, state, operation_response, user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_tcp_response(self, client_socket, operation, state, status_code, token):
+    def send_tcp_response(self, client_socket, operation, state, operation_response, token):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
-                "status": status_code,
+                "status": operation_response["status"],
+                "message": operation_response["message"],
                 "token": token
             }
 
@@ -94,7 +109,7 @@ class Server:
 
         finally:
             print('tcp socket closing....')
-            self.tcp_socket.close()
+            client_socket.close()
 
 
     def receive_tcp_message(self, client_socket):
@@ -129,14 +144,18 @@ class Server:
                 self.broadcast(message_for_send.encode('utf-8'), address)
 
         finally:
-            print('socket closig....')
-            self.udp_socket.close()
+            print('tcp socket closing....')
+            self.tcp_socket.close()
 
     def create_room(self, user, room_name):
-        chat_room = ChatRoom(room_name)
-        chat_room.add_user(user)
-        self.rooms[room_name] = chat_room
+        if self.rooms.get(room_name) is None:
+            chat_room = ChatRoom(room_name)
+            chat_room.add_user(user)
+            self.rooms[room_name] = chat_room
 
+            return {"status": 200, "message": "Chat room created successfully."}
+        else:
+            return {"status": 400, "message": "Chat room already exists."}
 
     def create_user(self, user_name, address, operation):
         return User(
@@ -146,9 +165,12 @@ class Server:
             MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
         )
 
-    def join_room():
-        # TODO チャットルームに参加
-        print("join room")
+    def join_room(self, user, room_name):
+        if self.rooms.get(room_name) is not None:
+            self.rooms[room_name].add_user(user)
+            return {"status": 200, "message": "Joined chat room successfully."}
+        else:
+            return {"status": 404, "message": "Chat room not found."}
 
     def broadcast(self, message:bytes, self_address=None):
         for address in self.clients:
