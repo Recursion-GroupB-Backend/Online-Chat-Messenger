@@ -7,13 +7,13 @@ class ChatRoom:
         self.users = {}
 
     # user追加
-    def add_user(self, client_id, client: User):
-        self.users[client_id] = client
+    def add_user(self, client: User):
+        self.users[client.token] = client
 
     # user削除
-    def remove_user(self, client_id):
-        if client_id in self.users:
-            del self.users[client_id]
+    def remove_user(self, client: User):
+        if client.token in self.users:
+            del self.users[client.token]
 
     # 参加者にメッセージを送信
     def broadcast(self, message, self_address=None):
