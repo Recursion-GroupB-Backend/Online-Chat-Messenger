@@ -118,9 +118,15 @@ class Server:
         """TCPメッセージのヘッダーとペイロードを受信"""
         header = client_socket.recv(self.HEADER_MAX_BITE)
         room_name_size, operation, state, payload_size = struct.unpack('!B B B 29s', header)
-        payload = client_socket.recv(int.from_bytes(payload_size, 'big'))
-        room_name = payload[:room_name_size].decode('utf-8')
-        user_name = payload[room_name_size:].decode('utf-8')
+
+        body = client_socket.recv(int.from_bytes(payload_size, 'big'))
+        room_name = body[:room_name_size].decode('utf-8')
+
+        # JSONペイロードを抽出して解析
+        json_payload = body[room_name_size:]
+        payload = json.loads(json_payload.decode('utf-8'))
+
+        user_name = payload["user_name"]
 
         return room_name, user_name, operation, state, payload
 
