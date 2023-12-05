@@ -1,26 +1,144 @@
 import socket
 import threading
 import time
+import struct
+import json
+import secrets
+from constants.operation import Operation
+from constants.member_type import MemberType
+from server.user import User
+from server.chat_room import ChatRoom
+
+
 
 class Server:
-    def __init__(self):
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.server_sock.bind(('0.0.0.0', 9001))
+    TIME_OUT = 60
+    HEADER_MAX_BITE = 32
+    TOKEN_MAX_BITE = 128
+
+    STATUS_MESSAGE = {
+        200: 'Successfully joined a chat room',
+        201: 'Successfully create a chat room',
+        202: 'Server accpeted your request',
+        401: 'Token or room password is invalid',
+        404: 'Requested chat room does not exist',
+        409: 'Requested room name or username already exists',
+    }
+
+    def __init__(self, tcp_address = "0.0.0.0", udp_address = "0.0.0.0"):
+        self.tcp_address = tcp_address
+        self.udp_address = udp_address
+        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        self.tcp_socket.bind((self.tcp_address, 9000))
+        self.udp_socket.bind((self.udp_address, 9001))
         self.clients = {}
+        self.rooms = {}
         self.TIMEOUT = 60
 
     def start(self):
-        # 同時にメッセージ受信とクライアントのタイムアウト監視を行うことで効率的な並行処理が可能になる。
-        thread_check_timeout    = threading.Thread(target=self.check_client_timeout, daemon=True)
-        thread_check_timeout.start()
-        thread_recieve_message  = threading.Thread(target=self.recieve_message, daemon=True)
-        thread_recieve_message.start()
-    def recieve_message(self):
+        thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
+        thread_handle_tcp.start()
+
+        # TODO: UDP通信や他の要件はissue毎にコメント外していく
+        # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
+        # thread_check_timeout.start()
+        # thread_receive_message = threading.Thread(target=self.receive_message, daemon=True)
+        # thread_receive_message.start()
+
+
+    def wait_to_tcp_connections(self):
+        self.tcp_socket.listen(1)
+        while True:
+            print('\nwaiting to receive tcp connect')
+            client_socket, addr = self.tcp_socket.accept()
+            thread = threading.Thread(target=self.establish_tcp_connect, args=(client_socket, addr,))
+            thread.start()
+
+    def establish_tcp_connect(self, client_socket, addr):
+        try:
+            room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
+
+            print("-------- receive request value   -----------")
+            print("Room Name:", room_name)
+            print("User Name:", user_name)
+            print("Operation:", operation)
+            print("State:", state)
+            print("Payload:", payload)
+            print("-------- receive request value end ---------")
+
+            user = self.create_user(user_name, addr, operation)
+
+            # stateを処理中に更新
+            state =  1
+            operation_response = {}
+            if operation == Operation.CREATE_ROOM.value:
+                operation_response = self.create_room(user, room_name)
+            elif operation == Operation.JOIN_ROOM.value:
+                operation_response = self.join_room(user, room_name)
+
+            # 状態を更新
+            if operation_response["status"] in [200, 201]:
+                state = 2
+
+            # TCPレスポンスを返す
+            self.send_tcp_response(client_socket, operation, state, operation_response, len(room_name), user.token)
+
+
+        except Exception as e:
+            print("Error in receive_tcp_message:", e)
+
+    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name_size, token = None):
+        """クライアントにレスポンスを送信する"""
+        try:
+            payload = {
+                "status": operation_response["status"],
+                "message": operation_response["message"],
+                "token": token
+            }
+
+            payload_json = json.dumps(payload)
+            payload_bytes = payload_json.encode('utf-8')
+
+            # ヘッダーの作成
+            header = struct.pack('!B B B 29s', room_name_size, operation, state, len(payload_bytes).to_bytes(29, 'big'))
+
+            client_socket.sendall(header + payload_bytes)
+
+        except Exception as e:
+            print(f"Error in send_response: {e}")
+
+        finally:
+            print('tcp socket closing....')
+            client_socket.close()
+
+
+    def receive_tcp_message(self, client_socket):
+        """TCPメッセージのヘッダーとペイロードを受信"""
+        header = client_socket.recv(self.HEADER_MAX_BITE)
+        room_name_size, operation, state, payload_size = struct.unpack('!B B B 29s', header)
+
+        body = client_socket.recv(int.from_bytes(payload_size, 'big'))
+        room_name = body[:room_name_size].decode('utf-8')
+
+        # JSONペイロードを抽出して解析
+        json_payload = body[room_name_size:]
+        payload = json.loads(json_payload.decode('utf-8'))
+
+        user_name = payload["user_name"]
+
+        return room_name, user_name, operation, state, payload
+
+    def generate_token(self):
+        return secrets.token_hex(self.TOKEN_MAX_BITE)
+
+    def receive_message(self):
         try:
             while True:
                 print('\nwaiting to receive message')
                 # データの取得（データを受け取るまで処理は止まる）
-                data, address = self.server_sock.recvfrom(4096)
+                data, address = self.udp_socket.recvfrom(4096)
 
                 # 取得データを適切に処理
                 username_len = int.from_bytes(data[:1], byteorder='big')
@@ -34,8 +152,33 @@ class Server:
                 self.broadcast(message_for_send.encode('utf-8'), address)
 
         finally:
-            print('socket closig....')
-            self.server_sock.close()
+            print('tcp socket closing....')
+            self.tcp_socket.close()
+
+    def create_room(self, user, room_name):
+        if self.rooms.get(room_name) is None:
+            chat_room = ChatRoom(room_name)
+            chat_room.add_user(user)
+            self.rooms[room_name] = chat_room
+
+            return {"status": 200, "message": "Chat room created successfully."}
+        else:
+            return {"status": 400, "message": "Chat room already exists."}
+
+    def create_user(self, user_name, address, operation):
+        return User(
+            user_name,
+            address,
+            self.generate_token(),
+            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
+        )
+
+    def join_room(self, user, room_name):
+        if self.rooms.get(room_name) is not None:
+            self.rooms[room_name].add_user(user)
+            return {"status": 200, "message": "Joined chat room successfully."}
+        else:
+            return {"status": 404, "message": "Chat room not found."}
 
     def broadcast(self, message:bytes, self_address=None):
         for address in self.clients:
@@ -43,7 +186,7 @@ class Server:
                 # クライアントが自分自身で送信したメッセージは本人には返さない。
                 pass
             else:
-                self.server_sock.sendto(message, address)
+                self.udp_socket.sendto(message, address)
 
     def check_client_timeout(self):
         try:
@@ -59,15 +202,15 @@ class Server:
                 time.sleep(10)  # 10秒ごとに監視
         finally:
             print('socket closig....')
-            self.server_sock.close()
+            self.udp_socket.close()
 
     def shutdown(self):
         print("Server is shutting down.")
-        self.server_sock.close()
+        self.udp_socket.close()
         # その他のクリーンアップ処理があればここに追加
 
 if __name__ == "__main__":
-    server = Server()
+    server = Server("0.0.0.0", "0.0.0.0")
     server.start()
     try:
         while True:  # メインスレッドをアクティブに保つ

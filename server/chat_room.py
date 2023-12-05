@@ -1,5 +1,5 @@
 import time
-from user import User
+from server.user import User
 
 class ChatRoom:
     def __init__(self, room_name):
