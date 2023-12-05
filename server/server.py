@@ -70,24 +70,26 @@ class Server:
 
             user = self.create_user(user_name, addr, operation)
 
+            # stateを処理中に更新
+            state =  1
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
                 operation_response = self.create_room(user, room_name)
             elif operation == Operation.JOIN_ROOM.value:
                 operation_response = self.join_room(user, room_name)
 
-            print("-------- operation response start   -----------")
-            print(operation_response)
-            print("-------- operation response end   -----------")
+            # 状態を更新
+            if operation_response["status"] in [200, 201]:
+                state = 2
 
             # TCPレスポンスを返す
-            self.send_tcp_response(client_socket, operation, state, operation_response, user.token)
+            self.send_tcp_response(client_socket, operation, state, operation_response, len(room_name), user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_tcp_response(self, client_socket, operation, state, operation_response, token):
+    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name_size, token = None):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
@@ -100,7 +102,7 @@ class Server:
             payload_bytes = payload_json.encode('utf-8')
 
             # ヘッダーの作成
-            header = struct.pack('!B B B 29s', 0, operation, state, len(payload_bytes).to_bytes(29, 'big'))
+            header = struct.pack('!B B B 29s', room_name_size, operation, state, len(payload_bytes).to_bytes(29, 'big'))
 
             client_socket.sendall(header + payload_bytes)
 
