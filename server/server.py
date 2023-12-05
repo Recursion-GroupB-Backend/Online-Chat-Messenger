@@ -83,13 +83,13 @@ class Server:
                 state = 2
 
             # TCPレスポンスを返す
-            self.send_tcp_response(client_socket, operation, state, operation_response, len(room_name), user.token)
+            self.send_tcp_response(client_socket, operation, state, operation_response, room_name, user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name_size, token = None):
+    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name, token = None):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
@@ -100,11 +100,12 @@ class Server:
 
             payload_json = json.dumps(payload)
             payload_bytes = payload_json.encode('utf-8')
+            room_name_bytes = room_name.encode('utf-8')
 
-            # ヘッダーの作成
-            header = struct.pack('!B B B 29s', room_name_size, operation, state, len(payload_bytes).to_bytes(29, 'big'))
+            header = struct.pack('!B B B 29s', len(room_name), operation, state, len(payload_bytes).to_bytes(29, 'big'))
+            body = room_name_bytes + payload_bytes
 
-            client_socket.sendall(header + payload_bytes)
+            client_socket.sendall(header + body)
 
         except Exception as e:
             print(f"Error in send_response: {e}")
