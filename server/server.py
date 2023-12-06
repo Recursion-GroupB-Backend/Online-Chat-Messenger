@@ -15,6 +15,7 @@ class Server:
     TIME_OUT = 60
     HEADER_MAX_BITE = 32
     TOKEN_MAX_BITE = 128
+    MAX_MESSAGE_SIZE = 4096
 
     STATUS_MESSAGE = {
         200: 'Successfully joined a chat room',
@@ -37,15 +38,30 @@ class Server:
         self.rooms = {}
         self.TIMEOUT = 60
 
+
+        # UDPテスト用 最後に消す
+        user = User(
+            "test",
+           "127.0.0.1",
+            "test",
+            "host"
+        )
+
+        room = ChatRoom("test")
+        room.add_user(user)
+
+        self.rooms["test"] = room
+
+
     def start(self):
-        thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
-        thread_handle_tcp.start()
+        # thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
+        # thread_handle_tcp.start()
 
         # TODO: UDP通信や他の要件はissue毎にコメント外していく
         # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
         # thread_check_timeout.start()
-        # thread_receive_message = threading.Thread(target=self.receive_message, daemon=True)
-        # thread_receive_message.start()
+        thread_receive_udp_message = threading.Thread(target=self.receive_udp_message, daemon=True)
+        thread_receive_udp_message.start()
 
 
     def wait_to_tcp_connections(self):
@@ -134,27 +150,59 @@ class Server:
     def generate_token(self):
         return secrets.token_hex(self.TOKEN_MAX_BITE)
 
-    def receive_message(self):
+    def receive_udp_message(self):
         try:
             while True:
                 print('\nwaiting to receive message')
-                # データの取得（データを受け取るまで処理は止まる）
-                data, address = self.udp_socket.recvfrom(4096)
 
-                # 取得データを適切に処理
-                username_len = int.from_bytes(data[:1], byteorder='big')
-                username = data[1:1 + username_len].decode('utf-8')
-                message_for_send = f"{username}: {data[1 + username_len:].decode('utf-8')}"
+                data, address = self.udp_socket.recvfrom(self.MAX_MESSAGE_SIZE)
 
-                # サーバーに参加しているクライアントを管理
-                self.clients[address] = {'username':username,'last_time': time.time()}
+                # ヘッダーを解析
+                room_name_size = data[0]
+                token_size = data[1]
+
+                # ボディを抽出
+                start = 2
+                room_name = data[start:start + room_name_size].decode('utf-8')
+                start += room_name_size
+                token = data[start:start + token_size].decode('utf-8')
+                start += token_size
+                message = data[start:].decode('utf-8')
+
+                # メッセージ処理
+                print(f"Room: {room_name}, Token: {token}, Message: {message}")
+
+                # トークンとIPアドレスの検証やlast_activeの更新などの処理をここに追加
+                if not self.valid_user(token, address[0], room_name):
+                    raise Exception("Invalid user or token mismatch")
+                
+
+                print("有効なトークンです")
+
 
                 # 接続されている全てのクライアントにメッセージを送信
-                self.broadcast(message_for_send.encode('utf-8'), address)
+                # self.broadcast(message.encode('utf-8'), address)
 
-        finally:
-            print('tcp socket closing....')
-            self.tcp_socket.close()
+        except Exception as e:
+            print(f'receive error message: {e}')
+            self.udp_socket.close()
+
+    def valid_user(self, token, address, room_name):
+        if self.rooms.get(room_name) is not None:
+            print("room_nameはOKです")
+            room = self.rooms[room_name]
+
+            # トークンがルームのユーザー辞書に含まれているか確認
+            if room.users.get(token) is not None:
+                print("tokenは一致してます")
+                user = room.users[token]
+
+            print(user.address)
+            print(address)
+            # トークンに紐づくユーザーのIPアドレスが引数のアドレスと一致するか確認
+            return user.address == address
+
+        return False
 
     def create_room(self, user, room_name):
         if self.rooms.get(room_name) is None:
