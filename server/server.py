@@ -63,6 +63,11 @@ class Server:
         try:
             room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
 
+            # stateを処理中に更新
+            state =  1
+
+            # TODO: 受信レスポンスをする場合ここで行う
+
             print("-------- receive request value   -----------")
             print("Room Name:", room_name)
             print("User Name:", user_name)
@@ -73,8 +78,6 @@ class Server:
 
             user = self.create_user(user_name, addr, operation)
 
-            # stateを処理中に更新
-            state =  1
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
                 operation_response = self.create_room(user, room_name)
@@ -163,8 +166,7 @@ class Server:
 
                 # TODO: # last_activeの更新などの処理を
 
-                # 同じチャットメンバーにメッセージを中継
-                self.broadcast(message.encode('utf-8'), room_name, token)
+                self.broadcast(message, room_name, token)
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -173,17 +175,12 @@ class Server:
 
     def valid_user(self, token, address, room_name):
         if self.rooms.get(room_name) is not None:
-            print("room_nameはOKです")
             room = self.rooms[room_name]
 
             # トークンがルームのユーザー辞書に含まれているか確認
             if room.users.get(token) is not None:
-                print("tokenは一致してます")
                 user = room.users[token]
 
-            print("以下はデバッグです")
-            print(user.address)
-            print(address)
             # トークンに紐づくユーザーのIPアドレスが引数のアドレスと一致するか確認
             if user.address[0] == address[0] and user.token == token:
                 # アドレス(IPとポート番号のタプル)を更新
@@ -216,30 +213,25 @@ class Server:
             return {"status": 200, "message": "Joined chat room successfully."}
         else:
             return {"status": 404, "message": "Chat room not found."}
-        
+
 
     def broadcast(self, message, room_name, token):
         room = self.rooms[room_name]
 
         send_user = room.users[token]
         user_name_encoded = send_user.user_name.encode('utf-8')
-
-        print("中継処理を開始")
+        message_encoded = message.encode('utf-8')
 
         # チャットルーム内の全ユーザーにメッセージを送信
         for user_token, user in room.users.items():
-
             # ヘッダーの作成
             user_name_size = len(user_name_encoded)
-            message_size = len(message)
+            message_size = len(message_encoded)
             header = struct.pack('!BB', user_name_size, message_size)
 
-            full_message = header + user_name_encoded + message
+            full_message = header + user_name_encoded + message_encoded
 
-            # メッセージの送信
             self.udp_socket.sendto(full_message, user.address)
-
-        print("中継処理が完了しました")
 
     def check_client_timeout(self):
         try:
