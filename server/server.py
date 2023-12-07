@@ -175,13 +175,13 @@ class Server:
                 # トークンとIPアドレスの検証やlast_activeの更新などの処理をここに追加
                 if not self.valid_user(token, address[0], room_name):
                     raise Exception("Invalid user or token mismatch")
-                
+
 
                 print("有効なトークンです")
 
 
-                # 接続されている全てのクライアントにメッセージを送信
-                # self.broadcast(message.encode('utf-8'), address)
+                # 同じチャットメンバーにメッセージを中継
+                self.broadcast(message.encode('utf-8'), address)
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -228,14 +228,26 @@ class Server:
             return {"status": 200, "message": "Joined chat room successfully."}
         else:
             return {"status": 404, "message": "Chat room not found."}
+        
 
-    def broadcast(self, message:bytes, self_address=None):
-        for address in self.clients:
-            if (self_address == address):
-                # クライアントが自分自身で送信したメッセージは本人には返さない。
-                pass
-            else:
-                self.udp_socket.sendto(message, address)
+    def broadcast(self, message, sender_address, room_name):
+        # チャットルームを取得
+        room = self.rooms[room_name]
+
+        # チャットルーム内の全ユーザーにメッセージを送信
+        for token, user in room.users.items():
+            # メッセージを送信したクライアント自身には送らない
+            if user.address != sender_address:
+                self.udp_socket.sendto(message, (user.address, self.udp_port))
+
+
+    # def broadcast(self, message:bytes, self_address=None):
+    #     for address in self.clients:
+    #         if (self_address == address):
+    #             # クライアントが自分自身で送信したメッセージは本人には返さない。
+    #             pass
+    #         else:
+    #             self.udp_socket.sendto(message, address)
 
     def check_client_timeout(self):
         try:
