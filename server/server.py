@@ -118,18 +118,17 @@ class Server:
     def receive_tcp_message(self, client_socket):
         """TCPメッセージのヘッダーとペイロードを受信"""
         header = client_socket.recv(self.HEADER_MAX_BITE)
-        room_name_size, operation, state, payload_size = struct.unpack('!B B B 29s', header)
+        room_name_size, operation, state, operation_payload_size = struct.unpack('!B B B 29s', header)
 
-        body = client_socket.recv(int.from_bytes(payload_size, 'big'))
-        room_name = body[:room_name_size].decode('utf-8')
+        room_name = client_socket.recv(room_name_size)
+        room_name = room_name.decode()
 
-        # JSONペイロードを抽出して解析
-        json_payload = body[room_name_size:]
-        payload = json.loads(json_payload.decode('utf-8'))
+        operation_payload = client_socket.recv(int.from_bytes(operation_payload_size, 'big'))
+        operation_payload = json.loads(operation_payload)
 
-        user_name = payload["user_name"]
+        user_name = operation_payload["user_name"]
 
-        return room_name, user_name, operation, state, payload
+        return room_name, user_name, operation, state, operation_payload
 
     def generate_token(self):
         return secrets.token_hex(self.TOKEN_MAX_BITE)
