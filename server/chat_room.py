@@ -23,6 +23,21 @@ class ChatRoom:
             else:
                 user.send_message(message, address)
 
+    def broadcast_remove_message(self, remove_client: User, udp_socket):
+        for address, user in self.users.items():
+            if address == remove_client.address:
+                self.remove_user(remove_client)
+                pass
+            else:
+                message = f"{user.username} has left {self.room_name}"
+
+            remove_msg = {
+                "room_name": self.room_name,
+                "username": user.user_name,
+                "message": message
+            }
+            udp_socket.sendto(remove_msg, user.address)
+
     def check_timeout(self):
         try:
             while True:
