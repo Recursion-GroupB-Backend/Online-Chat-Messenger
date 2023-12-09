@@ -92,13 +92,13 @@ class Client:
         """
         送信プロトコル確認用：後で削除
         """
-        print("-------- リクエスト   -----------")
-        print("Room Name:", self.room_name)
-        print("User Name:", self.user_name)
-        print("Operation:", self.operation_code)
-        print("State:", self.state)
-        print("Payload:", operation_payload)
-        print("-------- リクエスト ---------")
+        # print("-------- リクエスト   -----------")
+        # print("Room Name:", self.room_name)
+        # print("User Name:", self.user_name)
+        # print("Operation:", self.operation_code)
+        # print("State:", self.state)
+        # print("Payload:", operation_payload)
+        # print("-------- リクエスト ---------")
         
         header = struct.pack('!B B B 29s', len(self.room_name), self.operation_code, self.state, operation_payload_size_bytes)
         body = self.room_name.encode('utf-8') + operation_payload_bytes
@@ -120,13 +120,13 @@ class Client:
             """
             受信プロトコル確認用：後で削除
             """
-            print("-------- レスポンス   -----------")
-            print(f'room_name_size: {room_name_size}')
-            print(f'operation_code: {operation_code}')
-            print(f'State: {response_state}')
-            print(f'room_name: {self.room_name}') 
-            print(f'Payload: {operation_payload}') 
-            print("-------- レスポンス   -----------")
+            # print("-------- レスポンス   -----------")
+            # print(f'room_name_size: {room_name_size}')
+            # print(f'operation_code: {operation_code}')
+            # print(f'State: {response_state}')
+            # print(f'room_name: {self.room_name}') 
+            # print(f'Payload: {operation_payload}') 
+            # print("-------- レスポンス   -----------")
             
             if response_state == 2:
                 self.token = operation_payload['token']
