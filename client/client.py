@@ -10,8 +10,6 @@ class Client:
     ROOM_NAME_SIZE = 255
     HEADER_SIZE = 32
     BUFFER_SIZE = 4096
-    CREATE_ROOM = 1
-    JOIN_ROOM = 2
 
     def __init__(self, server_address='0.0.0.0'):
         self.udp_client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -32,7 +30,7 @@ class Client:
         self.tcp_connect_server()
         thread_send = threading.Thread(target=self.udp_send_message, daemon=True)
         thread_send.start()
-        thread_recieve_message = threading.Thread(target=self.receive_message, daemon=True)
+        thread_recieve_message = threading.Thread(target=self.udp_receive_message, daemon=True)
         thread_recieve_message.start()  
 
     def input_username(self):
@@ -59,7 +57,7 @@ class Client:
         # ルーム作成 or 参加の指定
         while True:
             print("1. Create a new room\n"
-                "2. Join room\n")
+                "2. Join room")
             try:
                 print("Please enter 1 or 2 : ")
                 self.operation_code = int(input())
@@ -142,7 +140,7 @@ class Client:
             self.tcp_client_sock.close()
             break
     
-    def send_message(self):
+    def udp_send_message(self):
         try:
             print('Enter your message')
             while True:
@@ -153,7 +151,6 @@ class Client:
                     continue
                 message_byte = self.udp_message_encode(message)
                 self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
-                print("メッセージを送信")
         finally:
             print('socket closig....')
             self.udp_client_sock.close()
@@ -170,11 +167,16 @@ class Client:
         
         return header + body
     
-    def receive_message(self):
+    def udp_receive_message(self):
         try:
             while True:
-                message, _ = self.udp_client_sock.recvfrom(4096)
-                print(f"受信メッセージ：{message.decode('utf-8')}")
+                data, _ = self.udp_client_sock.recvfrom(4096)
+                user_name_size = data[0]
+                message_size = data[1]
+                user_name = data[2: 2 + user_name_size]
+                message = data[2 + user_name_size:]
+                if user_name.decode('utf-8') != self.user_name:
+                    print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
         finally:
             print('socket closing')
             self.udp_client_sock.close()
@@ -182,6 +184,7 @@ class Client:
     def shutdown(self):
         print("Client is shutting down.")
         self.udp_client_sock.close()
+        self.tcp_client_sock.close()
         # その他のクリーンアップ処理があればここに追加
 
 if __name__ == "__main__":
