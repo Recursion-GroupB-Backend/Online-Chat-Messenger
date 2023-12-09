@@ -140,8 +140,8 @@ class Client:
                 # operation_payload_bytesが空でないことを確認
                 if not operation_payload:
                     print("No payload received, or the connection was closed.")
+                    break
                 print(operation_payload['message'])    
-                break
             self.tcp_client_sock.close()
             break
     
