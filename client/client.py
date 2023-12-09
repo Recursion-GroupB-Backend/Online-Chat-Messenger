@@ -3,6 +3,7 @@ import threading
 import time
 import struct
 import json
+from constants.operation import Operation
 
 class Client:
     NAME_SIZE = 255
@@ -45,13 +46,13 @@ class Client:
             break
 
     def tcp_connect_server(self):
-        # try:
+        try:
             self.tcp_client_sock.connect((self.server_address, self.tcp_server_port))
             custom_tcp_request = self.create_tcp_request()
             self.tcp_client_sock.sendall(custom_tcp_request)
             self.receive_tcp_response()
-        # except Exception as e:
-        #     print(f"An error occurred while connecting to the server: {e}")
+        except Exception as e:
+            print(f"An error occurred while connecting to the server: {e}")
 
     def create_tcp_request(self):
 
@@ -62,7 +63,7 @@ class Client:
             try:
                 print("Please enter 1 or 2 : ")
                 self.operation_code = int(input())
-                if int(self.operation_code) in [Client.CREATE_ROOM, Client.JOIN_ROOM]:
+                if int(self.operation_code) in [Operation.CREATE_ROOM.value, Operation.JOIN_ROOM.value]:
                     break
             except Exception:
                 continue
@@ -128,21 +129,20 @@ class Client:
             print(f'room_name: {self.room_name}') 
             print(f'Payload: {operation_payload}') 
             print("-------- レスポンス   -----------")
-            # エラー時のハンドリング
+            
             if response_state == 2:
+                self.token = operation_payload['token']
+                print(operation_payload['message'])
+            else:
                 # operation_payload_bytesが空でないことを確認
                 if not operation_payload:
                     print("No payload received, or the connection was closed.")
                     break
-                self.token = operation_payload['token'] 
-            else: 
-                # エラー時のメッセージを表示
-                print(f"{operation_payload['message']}")
-            
+                print(operation_payload['message'])    
             self.tcp_client_sock.close()
             break
     
-    def udp_send_message(self):
+    def send_message(self):
         try:
             print('Enter your message')
             while True:
