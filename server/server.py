@@ -12,7 +12,6 @@ from server.chat_room import ChatRoom
 
 
 class Server:
-    TIME_OUT = 60
     HEADER_MAX_BITE = 32
     TOKEN_MAX_BITE = 80
     MAX_MESSAGE_SIZE = 4096
@@ -158,15 +157,19 @@ class Server:
                 start += token_size
                 message = data[start:].decode('utf-8')
 
-                # デバッグログ
-                print(f"room name: {room_name}, token: {token}, message: {message}")
+                # userが退出した時の処理
+                if message == "Client has exited":
+                    room = self.rooms[room_name]
+                    room.broadcast_remove_message(room.users[token], self.udp_socket)
+                    pass
+                else:
+                    # デバッグログ
+                    print(f"room name: {room_name}, token: {token}, message: {message}")
+                    if not self.valid_user(token, address, room_name):
+                        raise Exception("Invalid user or token mismatch")
 
-                if not self.valid_user(token, address, room_name):
-                    raise Exception("Invalid user or token mismatch")
-
-                # TODO: # last_activeの更新などの処理を
-
-                self.broadcast(message, room_name, token)
+                    # TODO: # last_activeの更新などの処理を
+                    self.rooms[room_name].broadcast(message, token, self.udp_socket)
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -192,6 +195,8 @@ class Server:
     def create_room(self, user, room_name):
         if self.rooms.get(room_name) is None:
             chat_room = ChatRoom(room_name)
+            # thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
+            # thread_check_timeout.start()
             chat_room.add_user(user)
             self.rooms[room_name] = chat_room
 
@@ -232,22 +237,6 @@ class Server:
             full_message = header + user_name_encoded + message_encoded
 
             self.udp_socket.sendto(full_message, user.address)
-
-    def check_client_timeout(self):
-        try:
-            while True:
-                current_time = time.time()
-                for address, client_data in self.clients.items():
-                    if current_time - client_data['last_time'] > self.TIMEOUT:
-                        username = client_data['username']
-                        print(f"Client {username} ({address}) has timed out.")
-                        timeout_message = f"{username} has timed out and left the chat.".encode('utf-8')
-                        self.broadcast(timeout_message)
-                        self.clients.pop(address, None)
-                time.sleep(10)  # 10秒ごとに監視
-        finally:
-            print('socket closig....')
-            self.udp_socket.close()
 
     def shutdown(self):
         print("Server is shutting down.")
