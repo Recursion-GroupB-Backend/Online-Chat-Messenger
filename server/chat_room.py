@@ -24,12 +24,12 @@ class ChatRoom:
                 user.send_message(message, address)
 
     def broadcast_remove_message(self, remove_client: User, udp_socket):
-        for address, user in self.users.items():
-            if address == remove_client.address:
+        for token, user in self.users.items():
+            if token == remove_client.token:
                 self.remove_user(remove_client)
                 pass
             else:
-                message = f"{user.username} has left {self.room_name}"
+                message = f"{user.username} has left {self.room_name}."
 
             remove_msg = {
                 "room_name": self.room_name,
@@ -42,13 +42,13 @@ class ChatRoom:
         try:
             while True:
                 current_time = time.time()
-                for address, user in self.users.items():
+                for token, user in self.users.items():
                     if current_time - user['last_active'] > self.TIMEOUT:
                         username = user['username']
-                        print(f"Client {username} ({address}) has timed out.")
+                        print(f"Client {username} ({token}) has timed out.")
                         timeout_message = f"{username} has timed out and left the chat.".encode('utf-8')
                         self.broadcast(timeout_message)
-                        self.users.pop(address, None)
+                        self.remove_user(user)
                 time.sleep(10)
         finally:
             print('socket closig....')
