@@ -44,10 +44,10 @@ class Server:
         thread_handle_tcp.start()
 
         # TODO: UDP通信や他の要件はissue毎にコメント外していく
-        # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
-        # thread_check_timeout.start()
         thread_receive_udp_message = threading.Thread(target=self.receive_udp_message, daemon=True)
         thread_receive_udp_message.start()
+        thread_check_timeout = threading.Thread(target=self.remove_inactive_users, daemon=True)
+        thread_check_timeout.start()
 
 
     def wait_to_tcp_connections(self):
@@ -87,6 +87,8 @@ class Server:
             if operation_response["status"] in [200, 201]:
                 state = 2
 
+            print("#######################")
+
             # TCPレスポンスを返す
             self.send_tcp_response(client_socket, operation, state, operation_response, room_name, user.token)
 
@@ -107,10 +109,14 @@ class Server:
             payload_bytes = payload_json.encode('utf-8')
             room_name_bytes = room_name.encode('utf-8')
 
+            print("ここまでOK1")
+
             header = struct.pack('!B B B 29s', len(room_name), operation, state, len(payload_bytes).to_bytes(29, 'big'))
             body = room_name_bytes + payload_bytes
 
             client_socket.sendall(header + body)
+
+            print("ここまでOK2")
 
         except Exception as e:
             print(f"Error in send_response: {e}")
@@ -197,8 +203,8 @@ class Server:
             chat_room = ChatRoom(room_name)
             chat_room.add_user(user)
             self.rooms[room_name] = chat_room
-            thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
-            thread_check_timeout.start()
+            # thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
+            # thread_check_timeout.start()
 
             return {"status": 200, "message": "Chat room created successfully."}
         else:
@@ -242,6 +248,17 @@ class Server:
         print("Server is shutting down.")
         self.udp_socket.close()
         # その他のクリーンアップ処理があればここに追加
+
+
+    def remove_inactive_users(self):
+        while True:
+            for room_name, room in self.rooms.items():
+                room.check_timeout(self.udp_socket)
+                # デバッグ出力: 各ルームのユーザー一覧
+                print(f"Room '{room_name}' users:")
+
+            print("10秒間間隔を空けます")
+            time.sleep(10)
 
 if __name__ == "__main__":
     server = Server("0.0.0.0", "0.0.0.0")

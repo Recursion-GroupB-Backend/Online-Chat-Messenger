@@ -61,17 +61,15 @@ class ChatRoom:
                 udp_socket.sendto(full_message, user.address)
 
     def check_timeout(self, udp_socket):
-        try:
-            while True:
-                current_time = time.time()
-                for token, user in self.users.items():
-                    if current_time - user.last_active > self.TIME_OUT:
-                        username = user.user_name
-                        print(f"Client {username} ({token}) has timed out.")
-                        timeout_message = f"{username} has timed out and left the chat.".encode('utf-8')
-                        self.broadcast(timeout_message, token, udp_socket)
-                        self.remove_user(user)
-                time.sleep(10)
-        finally:
-            print('socket closig....')
-            # self.server_sock.close()
+        timeout_users = []
+        current_time = time.time()
+        for token, user in list(self.users.items()):
+            if current_time - user.last_active > self.TIME_OUT:
+                timeout_users.append(user)
+
+        for user in timeout_users:
+            timeout_message = f"{user.user_name} has timed out and left the chat."
+            self.broadcast(timeout_message, user.token, udp_socket)
+            self.remove_user(user)
+
+        print("削除完了")
