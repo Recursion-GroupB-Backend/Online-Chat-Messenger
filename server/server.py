@@ -195,10 +195,10 @@ class Server:
     def create_room(self, user, room_name):
         if self.rooms.get(room_name) is None:
             chat_room = ChatRoom(room_name)
-            # thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
-            # thread_check_timeout.start()
             chat_room.add_user(user)
             self.rooms[room_name] = chat_room
+            thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
+            thread_check_timeout.start()
 
             return {"status": 200, "message": "Chat room created successfully."}
         else:

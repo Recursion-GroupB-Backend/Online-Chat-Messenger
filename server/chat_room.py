@@ -3,7 +3,7 @@ import struct
 from server.user import User
 
 class ChatRoom:
-    TIME_OUT = 3
+    TIME_OUT = 10
 
     def __init__(self, room_name):
         self.room_name = room_name
@@ -64,9 +64,9 @@ class ChatRoom:
         try:
             while True:
                 current_time = time.time()
-                for token, user in list(self.users.items()):
-                    if current_time - user['last_active'] > self.TIMEOUT:
-                        username = user['username']
+                for token, user in self.users.items():
+                    if current_time - user.last_active > self.TIME_OUT:
+                        username = user.user_name
                         print(f"Client {username} ({token}) has timed out.")
                         timeout_message = f"{username} has timed out and left the chat.".encode('utf-8')
                         self.broadcast(timeout_message, token, udp_socket)
