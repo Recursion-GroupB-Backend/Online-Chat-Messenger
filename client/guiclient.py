@@ -96,7 +96,7 @@ class GuiClient(Client):
         self.message_entry.bind("<Return>", self.udp_send_message_tkinter)  # エンターキーにudp_send_message_tkinterをバインド
         
         # 送信ボタン
-        send_button = tk.Button(self.chat_window, text="送信", command=self.udp_send_message_tkinter)
+        send_button = tk.Button(self.chat_window, text="send", command=self.udp_send_message_tkinter)
         send_button.pack(pady=5) 
         
         # チャットウィンドウが閉じられた際の処理
