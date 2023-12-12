@@ -123,6 +123,8 @@ class Client:
                     print("No payload received, or the connection was closed.")
                     break
                 print(operation_payload['message'])
+                self.shutdown()
+
             self.tcp_client_sock.close()
             break
 
@@ -167,6 +169,10 @@ class Client:
                 message = data[2 + user_name_size:]
                 if user_name.decode('utf-8') != self.user_name:
                     print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
+
+        except OSError:
+            pass
+
         finally:
             print('socket closing')
             self.udp_client_sock.close()
@@ -189,12 +195,18 @@ class Client:
             print(f"Your name must be less than {Client.ROOM_NAME_SIZE} bytes")
 
     def prompt_for_password(self):
-        return input('Enter Password: ')
+        while True:
+            password = input('Enter Password: ')
+            if len(password) < 6:
+                print("Password must be at least 6 characters long.")
+            else:
+                return password
 
     def shutdown(self):
         print("Client is shutting down.")
         self.udp_client_sock.close()
         self.tcp_client_sock.close()
+        exit()
 
 
 if __name__ == "__main__":
