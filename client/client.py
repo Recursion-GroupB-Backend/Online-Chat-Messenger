@@ -11,7 +11,7 @@ class Client:
     HEADER_SIZE = 32
     BUFFER_SIZE = 4096
 
-    def __init__(self, server_address='0.0.0.0'):
+    def __init__(self, server_address = '127.0.0.1'):
         self.udp_client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.tcp_client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_address  = server_address
@@ -24,6 +24,9 @@ class Client:
         self.state = 0
         self.password = ''
         self.token = ''
+
+        self.udp_client_sock.bind((self.server_address, 0))
+        self.udp_client_address = (self.udp_client_sock.getsockname()[0], self.udp_client_sock.getsockname()[1])
 
     def start(self):
         self.input_username()
@@ -78,8 +81,11 @@ class Client:
             break
 
         # 必要に応じてパスワードなどを追加する
-        operation_payload = {"user_name":self.user_name}
-
+        operation_payload = {
+            "user_name":self.user_name,
+            "ip": self.udp_client_address[0],
+            "port": self.udp_client_address[1]
+        }
 
         return self.create_tcp_protocol(operation_payload)
 
@@ -151,6 +157,10 @@ class Client:
                     continue
                 message_byte = self.udp_message_encode(message)
                 self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
+
+        except Exception as e:
+            print(f"Error sending message: {e}")
+
         finally:
             print('socket closig....')
             self.udp_client_sock.close()
@@ -188,13 +198,13 @@ class Client:
         print("Client is shutting down.")
         self.udp_client_sock.close()
         self.tcp_client_sock.close()
-        # その他のクリーンアップ処理があればここに追加
+
 
 if __name__ == "__main__":
     client = Client()
     client.start()
     try:
-        while True:  # メインスレッドをアクティブに保つ
+        while True:
             time.sleep(1)
     except KeyboardInterrupt:
         client.shutdown()

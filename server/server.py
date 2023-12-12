@@ -25,7 +25,7 @@ class Server:
         409: 'Requested room name or username already exists',
     }
 
-    def __init__(self, tcp_address = "0.0.0.0", udp_address = "0.0.0.0"):
+    def __init__(self, tcp_address = "127.0.0.1", udp_address = "127.0.0.1"):
         self.tcp_address = tcp_address
         self.udp_address = udp_address
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -57,7 +57,7 @@ class Server:
             thread = threading.Thread(target=self.establish_tcp_connect, args=(client_socket, addr,))
             thread.start()
 
-    def establish_tcp_connect(self, client_socket, addr):
+    def establish_tcp_connect(self, client_socket, tcp_address):
         try:
             room_name, user_name, operation, state, payload = self.receive_tcp_message(client_socket)
 
@@ -72,9 +72,11 @@ class Server:
             print("Operation:", operation)
             print("State:", state)
             print("Payload:", payload)
+            print("payload address", (payload['ip'], payload['port']))
+            print("tcp_address", tcp_address)
             print("-------- receive request value end ---------")
 
-            user = self.create_user(user_name, addr, operation)
+            user = self.create_user(user_name, tcp_address, (payload['ip'], payload['port']), operation)
 
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
@@ -184,9 +186,7 @@ class Server:
                 user = room.users[token]
 
             # トークンに紐づくユーザーのIPアドレスが引数のアドレスと一致するか確認
-            if user.address[0] == address[0] and user.token == token:
-                # アドレス(IPとポート番号のタプル)を更新
-                user.address = address
+            if user.udp_address[0] == address[0] and user.token == token:
                 return True
 
         return False
@@ -201,10 +201,11 @@ class Server:
         else:
             return {"status": 400, "message": "Chat room already exists."}
 
-    def create_user(self, user_name, address, operation):
+    def create_user(self, user_name, tcp_address, udp_address, operation):
         return User(
             user_name,
-            address,
+            tcp_address,
+            udp_address,
             self.generate_token(),
             MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
         )
@@ -232,10 +233,10 @@ class Server:
         # その他のクリーンアップ処理があればここに追加
 
 if __name__ == "__main__":
-    server = Server("0.0.0.0", "0.0.0.0")
+    server = Server()
     server.start()
     try:
-        while True:  # メインスレッドをアクティブに保つ
+        while True:
             time.sleep(1)
     except KeyboardInterrupt:
         server.shutdown()

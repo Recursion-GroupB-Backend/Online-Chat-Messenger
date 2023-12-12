@@ -34,7 +34,7 @@ class ChatRoom:
 
             full_message = header + user_name_encoded + message_encoded
 
-            udp_socket.sendto(full_message, user.address)
+            udp_socket.sendto(full_message, user.udp_address)
 
     def broadcast_remove_message(self, remove_client: User, udp_socket, is_timeout = False):
 
@@ -62,7 +62,7 @@ class ChatRoom:
                 header = struct.pack('!BB', user_name_size, message_size)
 
                 full_message = header + user_name_encoded + message_encoded
-                udp_socket.sendto(full_message, user.address)
+                udp_socket.sendto(full_message, user.udp_address)
 
     def check_timeout(self, udp_socket):
         timeout_users = []
@@ -73,4 +73,4 @@ class ChatRoom:
 
         for user in timeout_users:
             self.broadcast_remove_message(user, udp_socket, True)
-            print("削除完了")
+            print(f"{user.user_name} 削除完了")
