@@ -182,7 +182,7 @@ class Client:
             self.udp_client_sock.close()
 
     def shutdown(self):
-        exit_message = "Client has exited"
+        exit_message = "exit"
         message_byte = self.udp_message_encode(exit_message)
         self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
         print("Client is shutting down.")

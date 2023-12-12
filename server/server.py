@@ -38,16 +38,15 @@ class Server:
         self.TIMEOUT = 60
 
 
-
     def start(self):
         thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
         thread_handle_tcp.start()
 
         # TODO: UDP通信や他の要件はissue毎にコメント外していく
-        # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
-        # thread_check_timeout.start()
         thread_receive_udp_message = threading.Thread(target=self.receive_udp_message, daemon=True)
         thread_receive_udp_message.start()
+        thread_check_timeout = threading.Thread(target=self.remove_inactive_users, daemon=True)
+        thread_check_timeout.start()
 
 
     def wait_to_tcp_connections(self):
@@ -158,7 +157,7 @@ class Server:
                 message = data[start:].decode('utf-8')
 
                 # userが退出した時の処理
-                if message == "Client has exited":
+                if message == "exit":
                     room = self.rooms[room_name]
                     room.broadcast_remove_message(room.users[token], self.udp_socket)
                     pass
@@ -197,8 +196,6 @@ class Server:
             chat_room = ChatRoom(room_name)
             chat_room.add_user(user)
             self.rooms[room_name] = chat_room
-            thread_check_timeout = threading.Thread(target=chat_room.check_timeout(self.udp_socket), daemon=True)
-            thread_check_timeout.start()
 
             return {"status": 200, "message": "Chat room created successfully."}
         else:
@@ -219,24 +216,15 @@ class Server:
         else:
             return {"status": 404, "message": "Chat room not found."}
 
+    def remove_inactive_users(self):
+        while True:
+            for room_name, room in self.rooms.items():
+                room.check_timeout(self.udp_socket)
+                # デバッグ出力: 各ルームのユーザー一覧
+                print(f"Room '{room_name}' users:")
 
-    def broadcast(self, message, room_name, token):
-        room = self.rooms[room_name]
-
-        send_user = room.users[token]
-        user_name_encoded = send_user.user_name.encode('utf-8')
-        message_encoded = message.encode('utf-8')
-
-        # チャットルーム内の全ユーザーにメッセージを送信
-        for user_token, user in room.users.items():
-            # ヘッダーの作成
-            user_name_size = len(user_name_encoded)
-            message_size = len(message_encoded)
-            header = struct.pack('!BB', user_name_size, message_size)
-
-            full_message = header + user_name_encoded + message_encoded
-
-            self.udp_socket.sendto(full_message, user.address)
+            print("10秒間間隔を空けます")
+            time.sleep(10)
 
     def shutdown(self):
         print("Server is shutting down.")
