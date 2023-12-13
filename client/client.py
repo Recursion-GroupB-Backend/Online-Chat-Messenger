@@ -56,35 +56,15 @@ class Client:
             print(f"An error occurred while connecting to the server: {e}")
 
     def create_tcp_request(self):
+        self.operation_code = self.prompt_for_operation_code()
+        self.room_name = self.prompt_for_room_name()
+        self.password = self.prompt_for_password()
 
-        # ルーム作成 or 参加の指定
-        while True:
-            print("1. Create a new room\n"
-                "2. Join room")
-            try:
-                print("Please enter 1 or 2 : ")
-                self.operation_code = int(input())
-                if int(self.operation_code) in [Operation.CREATE_ROOM.value, Operation.JOIN_ROOM.value]:
-                    break
-            except Exception:
-                continue
-
-        # ルーム名の記入
-        while True:
-            self.room_name = input('Enter room name: ')
-            # ルーム名のサイズ確認
-            if len(self.room_name) > Client.ROOM_NAME_SIZE:
-                print(f"Your name must equal to less than {Client.ROOM_NAME_SIZE} bytes")
-                continue
-            # stage3で使うため一旦、コメントアウト
-            # self.password = input('Enter PassWord: ')
-            break
-
-        # 必要に応じてパスワードなどを追加する
         operation_payload = {
             "user_name":self.user_name,
             "ip": self.udp_client_address[0],
-            "port": self.udp_client_address[1]
+            "port": self.udp_client_address[1],
+            "password": self.password
         }
 
         return self.create_tcp_protocol(operation_payload)
@@ -143,6 +123,8 @@ class Client:
                     print("No payload received, or the connection was closed.")
                     break
                 print(operation_payload['message'])
+                self.shutdown()
+
             self.tcp_client_sock.close()
             break
 
@@ -187,9 +169,38 @@ class Client:
                 message = data[2 + user_name_size:]
                 if user_name.decode('utf-8') != self.user_name:
                     print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
+
+        except OSError:
+            pass
+
         finally:
             print('socket closing')
             self.udp_client_sock.close()
+
+    def prompt_for_operation_code(self):
+        while True:
+            print("1. Create a new room\n2. Join room")
+            try:
+                operation_code = int(input("Please enter 1 or 2: "))
+                if operation_code in [Operation.CREATE_ROOM.value, Operation.JOIN_ROOM.value]:
+                    return operation_code
+            except ValueError:
+                print("Invalid input. Please enter 1 or 2.")
+
+    def prompt_for_room_name(self):
+        while True:
+            room_name = input('Enter room name: ')
+            if len(room_name) <= Client.ROOM_NAME_SIZE:
+                return room_name
+            print(f"Your name must be less than {Client.ROOM_NAME_SIZE} bytes")
+
+    def prompt_for_password(self):
+        while True:
+            password = input('Enter Password: ')
+            if len(password) < 6:
+                print("Password must be at least 6 characters long.")
+            else:
+                return password
 
     def shutdown(self):
         exit_message = "exit"
@@ -198,6 +209,7 @@ class Client:
         print("Client is shutting down.")
         self.udp_client_sock.close()
         self.tcp_client_sock.close()
+        exit()
 
 
 if __name__ == "__main__":
