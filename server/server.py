@@ -18,15 +18,6 @@ class Server:
     TOKEN_MAX_BITE = 80
     MAX_MESSAGE_SIZE = 4096
 
-    STATUS_MESSAGE = {
-        200: 'Successfully joined a chat room',
-        201: 'Successfully create a chat room',
-        202: 'Server accpeted your request',
-        401: 'Token or room password is invalid',
-        404: 'Requested chat room does not exist',
-        409: 'Requested room name or username already exists',
-    }
-
     def __init__(self, tcp_address = "127.0.0.1", udp_address = "127.0.0.1"):
         self.tcp_address = tcp_address
         self.udp_address = udp_address
