@@ -2,8 +2,9 @@ import time
 from server.user import User
 
 class ChatRoom:
-    def __init__(self, room_name):
+    def __init__(self, room_name, password):
         self.room_name = room_name
+        self.password = password
         self.users = {}
 
     # user追加
