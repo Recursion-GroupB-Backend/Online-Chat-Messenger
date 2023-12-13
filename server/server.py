@@ -4,6 +4,7 @@ import time
 import struct
 import json
 import secrets
+import re
 from constants.operation import Operation
 from constants.member_type import MemberType
 from server.user import User
@@ -16,15 +17,6 @@ class Server:
     HEADER_MAX_BITE = 32
     TOKEN_MAX_BITE = 80
     MAX_MESSAGE_SIZE = 4096
-
-    STATUS_MESSAGE = {
-        200: 'Successfully joined a chat room',
-        201: 'Successfully create a chat room',
-        202: 'Server accpeted your request',
-        401: 'Token or room password is invalid',
-        404: 'Requested chat room does not exist',
-        409: 'Requested room name or username already exists',
-    }
 
     def __init__(self, tcp_address = "127.0.0.1", udp_address = "127.0.0.1"):
         self.tcp_address = tcp_address
@@ -82,10 +74,11 @@ class Server:
 
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
-                operation_response = self.create_room(user, room_name)
+                operation_response = self.create_room(user, room_name, payload['password'])
             elif operation == Operation.JOIN_ROOM.value:
-                operation_response = self.join_room(user, room_name)
+                operation_response = self.join_room(user, room_name, payload['password'])
 
+            print(operation_response)
             # 状態を更新
             if operation_response["status"] in [200, 201]:
                 state = 2
@@ -189,12 +182,15 @@ class Server:
 
         return False
 
-    def create_room(self, user, room_name):
+    def create_room(self, user, room_name, password):
+        validation_message = self.is_valid_password(password)
+        if validation_message:
+            return {"status": 400, "message": validation_message}
+
         if self.rooms.get(room_name) is None:
-            chat_room = ChatRoom(room_name)
+            chat_room = ChatRoom(room_name, password)
             chat_room.add_user(user)
             self.rooms[room_name] = chat_room
-
             return {"status": 200, "message": "Chat room created successfully."}
         else:
             return {"status": 400, "message": "Chat room already exists."}
@@ -208,10 +204,14 @@ class Server:
             MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
         )
 
-    def join_room(self, user, room_name):
-        if self.rooms.get(room_name) is not None:
-            self.rooms[room_name].add_user(user)
-            return {"status": 200, "message": "Joined chat room successfully."}
+    def join_room(self, user, room_name, password):
+        room = self.rooms.get(room_name)
+        if room is not None:
+            if room.password != password:
+                return {"status": 401, "message": "Incorrect password."}
+            else:
+                room.add_user(user)
+                return {"status": 200, "message": "Joined chat room successfully."}
         else:
             return {"status": 404, "message": "Chat room not found."}
 
@@ -249,6 +249,15 @@ class Server:
         finally:
             print('socket closig....')
             self.udp_socket.close()
+
+    def is_valid_password(self, password):
+        if len(password) < 6:
+            return "Password must be at least 6 characters long."
+        if not re.search("[0-9]", password):
+            return "Password must contain at least one digit."
+        if not re.search("[a-zA-Z]", password):
+            return "Password must contain at least one letter."
+        return None
 
     def shutdown(self):
         print("Server is shutting down.")
