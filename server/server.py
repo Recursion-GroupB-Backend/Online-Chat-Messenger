@@ -213,10 +213,14 @@ class Server:
             MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
         )
 
-    def join_room(self, user, room_name):
-        if self.rooms.get(room_name) is not None:
-            self.rooms[room_name].add_user(user)
-            return {"status": 200, "message": "Joined chat room successfully."}
+    def join_room(self, user, room_name, password):
+        room = self.rooms.get(room_name)
+        if room is not None:
+            if room.password != password:
+                return {"status": 401, "message": "Incorrect password."}
+            else:
+                room.add_user(user)
+                return {"status": 200, "message": "Joined chat room successfully."}
         else:
             return {"status": 404, "message": "Chat room not found."}
 
