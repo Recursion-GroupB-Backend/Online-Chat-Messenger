@@ -33,8 +33,8 @@ class Client:
         self.tcp_connect_server()
         thread_send = threading.Thread(target=self.udp_send_message, daemon=True)
         thread_send.start()
-        thread_receive_message = threading.Thread(target=self.udp_receive_message, daemon=True)
-        thread_receive_message.start()
+        thread_recieve_message = threading.Thread(target=self.udp_receive_message, daemon=True)
+        thread_recieve_message.start()
 
     def input_username(self):
         while True:
@@ -110,8 +110,8 @@ class Client:
             print(f'room_name_size: {room_name_size}')
             print(f'operation_code: {operation_code}')
             print(f'State: {response_state}')
-            print(f'room_name: {self.room_name}') 
-            print(f'Payload: {operation_payload}') 
+            print(f'room_name: {self.room_name}')
+            print(f'Payload: {operation_payload}')
             print("-------- レスポンス   -----------")
 
             if response_state == 2:
@@ -203,6 +203,9 @@ class Client:
                 return password
 
     def shutdown(self):
+        exit_message = "exit"
+        message_byte = self.udp_message_encode(exit_message)
+        self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
         print("Client is shutting down.")
         self.udp_client_sock.close()
         self.tcp_client_sock.close()
