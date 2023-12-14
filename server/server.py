@@ -15,7 +15,6 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 
 class Server:
-    TIME_OUT = 60
     HEADER_MAX_BITE = 32
     TOKEN_MAX_BITE = 80
     MAX_MESSAGE_SIZE = 4096
@@ -37,16 +36,15 @@ class Server:
         self.generate_rsa_key_pair()
 
 
-
     def start(self):
         thread_handle_tcp = threading.Thread(target=self.wait_to_tcp_connections, daemon=True)
         thread_handle_tcp.start()
 
         # TODO: UDP通信や他の要件はissue毎にコメント外していく
-        # thread_check_timeout = threading.Thread(target=self.check_client_timeout, daemon=True)
-        # thread_check_timeout.start()
         thread_receive_udp_message = threading.Thread(target=self.receive_udp_message, daemon=True)
         thread_receive_udp_message.start()
+        thread_check_timeout = threading.Thread(target=self.remove_inactive_users, daemon=True)
+        thread_check_timeout.start()
 
 
     def wait_to_tcp_connections(self):
@@ -180,12 +178,18 @@ class Server:
                 # デバッグログ
                 print(f"room name: {room_name}, token: {token}, message: {decrypted_message}")
 
-                if not self.valid_user(token, address, room_name):
-                    raise Exception("Invalid user or token mismatch")
+                # userが退出した時の処理
+                if decrypted_message == "exit":
+                    room = self.rooms[room_name]
+                    room.broadcast_remove_message(room.users[token], self.udp_socket)
+                    pass
+                else:
+                    if not self.valid_user(token, address, room_name):
+                        raise Exception("Invalid user or token mismatch")
 
-                # TODO: # last_activeの更新などの処理を
+                    # TODO: # last_activeの更新などの処理を
+                    self.rooms[room_name].broadcast(decrypted_message, token, self.udp_socket)
 
-                self.broadcast(decrypted_message, room_name, token)
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -240,43 +244,15 @@ class Server:
         else:
             return {"status": 404, "message": "Chat room not found."}
 
+    def remove_inactive_users(self):
+        while True:
+            for room_name, room in self.rooms.items():
+                room.check_timeout(self.udp_socket)
+                # デバッグ出力: 各ルームのユーザー一覧
+                print(f"Room '{room_name}' users:")
 
-    def broadcast(self, decrypted_message, room_name, token):
-        room = self.rooms[room_name]
-        send_user = room.users[token]
-
-        user_name_encoded = send_user.user_name.encode('utf-8')
-
-        for user_token, user in room.users.items():
-            # 各ユーザーの公開鍵で暗号化
-            encrypted_user_name = self.encrypt_message(user_name_encoded, user.public_key)
-            encrypted_message = self.encrypt_message(decrypted_message, user.public_key)
-
-            # ヘッダー作成
-            user_name_size = len(encrypted_user_name)
-            message_size = len(encrypted_message)
-            header = struct.pack('!HH', user_name_size, message_size)
-
-            full_message = header + encrypted_user_name + encrypted_message
-            print("Sending message", full_message)
-
-            self.udp_socket.sendto(full_message, user.udp_address)
-
-    def check_client_timeout(self):
-        try:
-            while True:
-                current_time = time.time()
-                for address, client_data in self.clients.items():
-                    if current_time - client_data['last_time'] > self.TIMEOUT:
-                        username = client_data['username']
-                        print(f"Client {username} ({address}) has timed out.")
-                        timeout_message = f"{username} has timed out and left the chat.".encode('utf-8')
-                        self.broadcast(timeout_message)
-                        self.clients.pop(address, None)
-                time.sleep(10)
-        finally:
-            print('socket closig....')
-            self.udp_socket.close()
+            print("10秒後に再びタイムアウトチェックを行います")
+            time.sleep(10)
 
     def is_valid_password(self, password):
         if len(password) < 6:
@@ -301,17 +277,6 @@ class Server:
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
 
-    def encrypt_message(self, message, client_public_key):
-        encrypted_message = client_public_key.encrypt(
-            message,
-            padding.OAEP(
-                mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                algorithm=hashes.SHA256(),
-                label=None
-            )
-        )
-        return encrypted_message
-
     def decrypt_message(self, encrypted_message):
         return self.server_private_key.decrypt(
             encrypted_message,
@@ -321,7 +286,6 @@ class Server:
                 label=None
             )
         )
-
 
     def shutdown(self):
         print("Server is shutting down.")
