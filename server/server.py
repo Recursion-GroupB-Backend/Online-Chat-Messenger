@@ -9,7 +9,8 @@ from constants.operation import Operation
 from constants.member_type import MemberType
 from server.user import User
 from server.chat_room import ChatRoom
-from cryptography.hazmat.primitives import serialization, asymmetric
+from cryptography.hazmat.primitives import serialization, asymmetric, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 
 
@@ -32,7 +33,6 @@ class Server:
         self.TIMEOUT = 60
         self.server_public_key = ''
         self.server_private_key = ''
-        self.client_public_key = ''
 
         self.generate_rsa_key_pair()
 
@@ -74,7 +74,15 @@ class Server:
             print("tcp_address", tcp_address)
             print("-------- receive request value end ---------")
 
-            user = self.create_user(user_name, tcp_address, (payload['ip'], payload['port']), operation)
+            user = self.create_user(
+                user_name,
+                tcp_address,
+                (payload['ip'], payload['port']),
+                operation,
+                payload['public_key']
+            )
+
+            print("ユーザー作成の完了")
 
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
@@ -136,13 +144,11 @@ class Server:
 
         user_name = operation_payload["user_name"]
 
-        public_key_pem = operation_payload.get("public_key")
-        self.client_public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
-
         return room_name, user_name, operation, state, operation_payload
 
     def generate_token(self):
         return secrets.token_hex(self.TOKEN_MAX_BITE)
+
 
     def receive_udp_message(self):
         try:
@@ -161,17 +167,25 @@ class Server:
                 start += room_name_size
                 token = data[start:start + token_size].decode('utf-8')
                 start += token_size
-                message = data[start:].decode('utf-8')
+                encrypted_message = data[start:]
+
+                # 暗号化されたメッセージを復号化
+                try:
+                    decrypted_message = self.decrypt_message(encrypted_message)
+
+                except Exception as e:
+                    print(f"Error decrypting message: {e}")
+                    continue
 
                 # デバッグログ
-                print(f"room name: {room_name}, token: {token}, message: {message}")
+                print(f"room name: {room_name}, token: {token}, message: {decrypted_message}")
 
                 if not self.valid_user(token, address, room_name):
                     raise Exception("Invalid user or token mismatch")
 
                 # TODO: # last_activeの更新などの処理を
 
-                self.broadcast(message, room_name, token)
+                self.broadcast(decrypted_message, room_name, token)
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -205,13 +219,14 @@ class Server:
         else:
             return {"status": 400, "message": "Chat room already exists."}
 
-    def create_user(self, user_name, tcp_address, udp_address, operation):
+    def create_user(self, user_name, tcp_address, udp_address, operation, public_key_pem):
         return User(
             user_name,
             tcp_address,
             udp_address,
             self.generate_token(),
-            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
+            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value,
+            serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
         )
 
     def join_room(self, user, room_name, password):
@@ -226,21 +241,24 @@ class Server:
             return {"status": 404, "message": "Chat room not found."}
 
 
-    def broadcast(self, message, room_name, token):
+    def broadcast(self, decrypted_message, room_name, token):
         room = self.rooms[room_name]
-
         send_user = room.users[token]
+
         user_name_encoded = send_user.user_name.encode('utf-8')
-        message_encoded = message.encode('utf-8')
 
-        # チャットルーム内の全ユーザーにメッセージを送信
         for user_token, user in room.users.items():
-            # ヘッダーの作成
-            user_name_size = len(user_name_encoded)
-            message_size = len(message_encoded)
-            header = struct.pack('!BB', user_name_size, message_size)
+            # 各ユーザーの公開鍵で暗号化
+            encrypted_user_name = self.encrypt_message(user_name_encoded, user.public_key)
+            encrypted_message = self.encrypt_message(decrypted_message, user.public_key)
 
-            full_message = header + user_name_encoded + message_encoded
+            # ヘッダー作成
+            user_name_size = len(encrypted_user_name)
+            message_size = len(encrypted_message)
+            header = struct.pack('!HH', user_name_size, message_size)
+
+            full_message = header + encrypted_user_name + encrypted_message
+            print("Sending message", full_message)
 
             self.udp_socket.sendto(full_message, user.udp_address)
 
@@ -282,6 +300,27 @@ class Server:
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
+
+    def encrypt_message(self, message, client_public_key):
+        encrypted_message = client_public_key.encrypt(
+            message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return encrypted_message
+
+    def decrypt_message(self, encrypted_message):
+        return self.server_private_key.decrypt(
+            encrypted_message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
 
 
     def shutdown(self):

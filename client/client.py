@@ -4,7 +4,8 @@ import time
 import struct
 import json
 from constants.operation import Operation
-from cryptography.hazmat.primitives import serialization, asymmetric
+from cryptography.hazmat.primitives import serialization, asymmetric, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 class Client:
     NAME_SIZE = 255
@@ -115,8 +116,8 @@ class Client:
             print(f'room_name_size: {room_name_size}')
             print(f'operation_code: {operation_code}')
             print(f'State: {response_state}')
-            print(f'room_name: {self.room_name}') 
-            print(f'Payload: {operation_payload}') 
+            print(f'room_name: {self.room_name}')
+            print(f'Payload: {operation_payload}')
             print("-------- レスポンス   -----------")
 
             if response_state == 2:
@@ -140,27 +141,28 @@ class Client:
             print('Enter your message')
             while True:
                 message = input()
+                encrypted_message = self.encrypt_message(message)
+
                 # 送信サイズの確認
-                if (2 + len(self.room_name) + len(self.token) + len(message.encode()) > client.BUFFER_SIZE):
-                    print(f'Messeges must be equal to or less than {Client.BUFFER_SIZE} bytes')
+                if (2 + len(self.room_name) + len(self.token) + len(encrypted_message) > Client.BUFFER_SIZE):
+                    print(f'Encrypted messages must be equal to or less than {Client.BUFFER_SIZE} bytes')
                     continue
-                message_byte = self.udp_message_encode(message)
+                message_byte = self.udp_message_encode(encrypted_message)
                 self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
 
         except Exception as e:
             print(f"Error sending message: {e}")
 
         finally:
-            print('socket closig....')
+            print('socket closing....')
             self.udp_client_sock.close()
 
-    def udp_message_encode(self, message:str):
+    def udp_message_encode(self, message_byte:str):
         # ヘッダー[2BYTE] + ボディ[ルーム名 + トークン + メッセージ]
         header = struct.pack('!B B', len(self.room_name), len(self.token))
 
         room_name_byte  = self.room_name.encode('utf-8')
         token_byte      = self.token.encode('utf-8')
-        message_byte    = message.encode('utf-8')
 
         body   = room_name_byte + token_byte + message_byte
 
@@ -170,19 +172,28 @@ class Client:
         try:
             while True:
                 data, _ = self.udp_client_sock.recvfrom(4096)
-                user_name_size = data[0]
-                message_size = data[1]
-                user_name = data[2: 2 + user_name_size]
-                message = data[2 + user_name_size:]
-                if user_name.decode('utf-8') != self.user_name:
-                    print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
+                user_name_size, message_size = struct.unpack('!HH', data[:4])
+                encrypted_user_name = data[4: 4 + user_name_size]
+                encrypted_message = data[4 + user_name_size: 4 + user_name_size + message_size]
+
+                # 暗号化されたユーザー名とメッセージを復号化
+                try:
+                    decrypted_user_name = self.decrypt_message(encrypted_user_name).decode('utf-8')
+                    decrypted_message = self.decrypt_message(encrypted_message).decode('utf-8')
+                except Exception as e:
+                    print(f"Error decrypting message: {e}")
+                    continue
+
+                if decrypted_user_name != self.user_name:
+                    print(f"{decrypted_user_name}：{decrypted_message}")
 
         except OSError:
             pass
-
         finally:
             print('socket closing')
             self.udp_client_sock.close()
+
+
 
     def prompt_for_operation_code(self):
         while True:
@@ -222,6 +233,27 @@ class Client:
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
         ).decode('utf-8')
+
+    def encrypt_message(self, message):
+        encrypted_message = self.server_public_key.encrypt(
+            message.encode(),
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return encrypted_message
+
+    def decrypt_message(self, encrypted_message):
+        return self.client_private_key.decrypt(
+            encrypted_message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
 
 
     def shutdown(self):
