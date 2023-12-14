@@ -41,33 +41,38 @@ class ChatRoom:
 
             udp_socket.sendto(full_message, user.udp_address)
 
-    def broadcast_remove_message(self, remove_client: User, udp_socket, is_timeout = False):
-
+    def broadcast_remove_message(self, remove_clients: User, udp_socket, is_timeout = False):
         # チャットルーム内の全ユーザーにメッセージを送信
-        send_user = self.users[remove_client.token]
+        send_user = self.users[remove_clients.token]
         user_name_encoded = send_user.user_name.encode('utf-8')
-        if is_timeout:
-            message = f"{remove_client.user_name} has timed out and left the {self.room_name}."
-        else:
-            message = f"{remove_client.user_name} has left the {self.room_name}."
 
-        message_encoded = message.encode('utf-8')
+        if is_timeout:
+            message = f"{remove_clients.user_name} has timed out and left the {self.room_name}."
+        else:
+            message = f"{remove_clients.user_name} has left the {self.room_name}."
 
         for token, user in list(self.users.items()):
-            if token == remove_client.token:
+            if token == remove_clients.token:
                 if user.member_type == "guest":
-                    self.remove_user(remove_client)
+                    self.remove_user(remove_clients)
                 # TODO user.member_typeがhostの場合の処理を追加
                 # else:
                 pass
             else:
-                # ヘッダーの作成
-                user_name_size = len(user_name_encoded)
-                message_size = len(message_encoded)
-                header = struct.pack('!BB', user_name_size, message_size)
+                # 各ユーザーの公開鍵で暗号化
+                encrypted_user_name = self.encrypt_message(user_name_encoded, user.public_key)
+                encrypted_message = self.encrypt_message(message.encode('utf-8'), user.public_key)
 
-                full_message = header + user_name_encoded + message_encoded
+                # ヘッダー作成
+                user_name_size = len(encrypted_user_name)
+                message_size = len(encrypted_message)
+                header = struct.pack('!HH', user_name_size, message_size)
+
+                full_message = header + encrypted_user_name + encrypted_message
+                print("Exiting message sending", full_message)
+
                 udp_socket.sendto(full_message, user.udp_address)
+
 
     def check_timeout(self, udp_socket):
         timeout_users = []

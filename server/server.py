@@ -251,7 +251,7 @@ class Server:
                 # デバッグ出力: 各ルームのユーザー一覧
                 print(f"Room '{room_name}' users:")
 
-            print("10秒後に再びタイムアウトチェックを行います")
+            print("10秒間間隔を空けます")
             time.sleep(10)
 
     def is_valid_password(self, password):
