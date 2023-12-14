@@ -9,6 +9,7 @@ from constants.operation import Operation
 from constants.member_type import MemberType
 from server.user import User
 from server.chat_room import ChatRoom
+from cryptography.hazmat.primitives import serialization, asymmetric
 
 
 
@@ -29,6 +30,11 @@ class Server:
         self.clients = {}
         self.rooms = {}
         self.TIMEOUT = 60
+        self.server_public_key = ''
+        self.server_private_key = ''
+        self.client_public_key = ''
+
+        self.generate_rsa_key_pair()
 
 
 
@@ -58,8 +64,6 @@ class Server:
             # stateを処理中に更新
             state =  1
 
-            # TODO: 受信レスポンスをする場合ここで行う
-
             print("-------- receive request value   -----------")
             print("Room Name:", room_name)
             print("User Name:", user_name)
@@ -83,20 +87,23 @@ class Server:
             if operation_response["status"] in [200, 201]:
                 state = 2
 
+            public_key_pem = self.encode_pem(self.server_public_key)
+
             # TCPレスポンスを返す
-            self.send_tcp_response(client_socket, operation, state, operation_response, room_name, user.token)
+            self.send_tcp_response(client_socket, operation, state, operation_response, room_name, public_key_pem, user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name, token = None):
+    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name, public_key_pem, token = None):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
                 "status": operation_response["status"],
                 "message": operation_response["message"],
-                "token": token
+                "token": token,
+                "public_key": public_key_pem
             }
 
             payload_json = json.dumps(payload)
@@ -128,6 +135,9 @@ class Server:
         operation_payload = json.loads(operation_payload)
 
         user_name = operation_payload["user_name"]
+
+        public_key_pem = operation_payload.get("public_key")
+        self.client_public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
 
         return room_name, user_name, operation, state, operation_payload
 
@@ -258,6 +268,21 @@ class Server:
         if not re.search("[a-zA-Z]", password):
             return "Password must contain at least one letter."
         return None
+
+    def generate_rsa_key_pair(self):
+        self.server_private_key = asymmetric.rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048
+        )
+
+        self.server_public_key = self.server_private_key.public_key()
+
+    def encode_pem(self, server_public_key):
+        return server_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+
 
     def shutdown(self):
         print("Server is shutting down.")

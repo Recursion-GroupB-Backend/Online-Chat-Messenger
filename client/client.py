@@ -4,6 +4,7 @@ import time
 import struct
 import json
 from constants.operation import Operation
+from cryptography.hazmat.primitives import serialization, asymmetric
 
 class Client:
     NAME_SIZE = 255
@@ -24,9 +25,13 @@ class Client:
         self.state = 0
         self.password = ''
         self.token = ''
+        self.client_public_key = ''
+        self.client_private_key = ''
+        self.server_public_key = ''
 
         self.udp_client_sock.bind((self.server_address, 0))
         self.udp_client_address = (self.udp_client_sock.getsockname()[0], self.udp_client_sock.getsockname()[1])
+        self.generate_rsa_key_pair()
 
     def start(self):
         self.input_username()
@@ -64,13 +69,13 @@ class Client:
             "user_name":self.user_name,
             "ip": self.udp_client_address[0],
             "port": self.udp_client_address[1],
-            "password": self.password
+            "password": self.password,
+            "public_key": self.encode_pem(self.client_public_key)
         }
 
         return self.create_tcp_protocol(operation_payload)
 
     def create_tcp_protocol(self, operation_payload: dict):
-
         # ペイロードをJSON文字列に変換し、バイト列にエンコード
         operation_payload_bytes = json.dumps(operation_payload).encode('utf-8')
         operation_payload_size_bytes = len(operation_payload_bytes).to_bytes(29, 'big')
@@ -116,6 +121,8 @@ class Client:
 
             if response_state == 2:
                 self.token = operation_payload['token']
+                public_key_pem = operation_payload.get("public_key")
+                self.server_public_key = serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
                 print(operation_payload['message'])
             else:
                 # operation_payload_bytesが空でないことを確認
@@ -201,6 +208,21 @@ class Client:
                 print("Password must be at least 6 characters long.")
             else:
                 return password
+
+    def generate_rsa_key_pair(self):
+        self.client_private_key = asymmetric.rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048
+        )
+
+        self.client_public_key = self.client_private_key.public_key()
+
+    def encode_pem(self, client_public_key):
+        return client_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+
 
     def shutdown(self):
         print("Client is shutting down.")
