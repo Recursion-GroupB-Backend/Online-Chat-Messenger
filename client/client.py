@@ -167,6 +167,9 @@ class Client:
                 message_size = data[1]
                 user_name = data[2: 2 + user_name_size]
                 message = data[2 + user_name_size:]
+                if "exit" == message.decode('utf-8'):
+                    print("The host has closed the chat room.")
+                    self.shutdown()
                 if user_name.decode('utf-8') != self.user_name:
                     print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
 

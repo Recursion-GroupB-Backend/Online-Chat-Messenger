@@ -10,5 +10,3 @@ class User:
         self.last_active = time.time()
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.member_type = member_type
-
-    # def send_message(self):

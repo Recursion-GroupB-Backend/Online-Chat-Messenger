@@ -152,8 +152,8 @@ class Server:
                 message = data[start:].decode('utf-8')
 
                 # userが退出した時の処理
+                room = self.rooms[room_name]
                 if message == "exit":
-                    room = self.rooms[room_name]
                     room.broadcast_remove_message(room.users[token], self.udp_socket)
                     pass
                 else:
@@ -162,8 +162,12 @@ class Server:
                     if not self.valid_user(token, address, room_name):
                         raise Exception("Invalid user or token mismatch")
 
-                    # TODO: # last_activeの更新などの処理を
-                    self.rooms[room_name].broadcast(message, token, self.udp_socket)
+                    # last_activeの更新処理
+                    user = room.users[token]
+                    user.last_active = time.time()
+                    print(user.last_active)
+                    room.broadcast(message, token, self.udp_socket)
+
 
         except Exception as e:
             print(f'receive error message: {e}')
@@ -197,6 +201,11 @@ class Server:
         else:
             return {"status": 400, "message": "Chat room already exists."}
 
+    # chatroom削除の処理
+    def delete_room(self, room_name):
+        if room_name in self.rooms:
+            del self.rooms[room_name]
+
     def create_user(self, user_name, tcp_address, udp_address, operation):
         return User(
             user_name,
@@ -219,12 +228,17 @@ class Server:
 
     def remove_inactive_users(self):
         while True:
-            for room_name, room in self.rooms.items():
-                room.check_timeout(self.udp_socket)
-                # デバッグ出力: 各ルームのユーザー一覧
-                print(f"Room '{room_name}' users:")
+            with threading.Lock():
+                rooms_to_remove = []
+                for room_name, room in self.rooms.items():
+                    room.check_timeout(self.udp_socket)
 
-            print("10秒間間隔を空けます")
+                    if not room.users:
+                        rooms_to_remove.append(room_name)
+
+                for room_name in rooms_to_remove:
+                    self.delete_room(room_name)
+
             time.sleep(10)
 
     def is_valid_password(self, password):
