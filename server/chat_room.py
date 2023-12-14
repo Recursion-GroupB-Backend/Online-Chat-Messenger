@@ -1,6 +1,8 @@
 import time
 import struct
 from server.user import User
+from cryptography.hazmat.primitives import serialization, asymmetric, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 class ChatRoom:
     TIME_OUT = 20
@@ -19,21 +21,23 @@ class ChatRoom:
         if client.token in self.users:
             del self.users[client.token]
 
-    # 参加者にメッセージを送信
-    def broadcast(self, message, token, udp_socket):
-
+    def broadcast(self, decrypted_message, token, udp_socket):
         send_user = self.users[token]
+
         user_name_encoded = send_user.user_name.encode('utf-8')
-        message_encoded = message.encode('utf-8')
 
-        # チャットルーム内の全ユーザーにメッセージを送信
         for user_token, user in self.users.items():
-            # ヘッダーの作成
-            user_name_size = len(user_name_encoded)
-            message_size = len(message_encoded)
-            header = struct.pack('!BB', user_name_size, message_size)
+            # 各ユーザーの公開鍵で暗号化
+            encrypted_user_name = self.encrypt_message(user_name_encoded, user.public_key)
+            encrypted_message = self.encrypt_message(decrypted_message, user.public_key)
 
-            full_message = header + user_name_encoded + message_encoded
+            # ヘッダー作成
+            user_name_size = len(encrypted_user_name)
+            message_size = len(encrypted_message)
+            header = struct.pack('!HH', user_name_size, message_size)
+
+            full_message = header + encrypted_user_name + encrypted_message
+            print("Sending message", full_message)
 
             udp_socket.sendto(full_message, user.udp_address)
 
@@ -75,3 +79,14 @@ class ChatRoom:
         for user in timeout_users:
             self.broadcast_remove_message(user, udp_socket, True)
             print(f"{user.user_name} 削除完了")
+
+    def encrypt_message(self, message, client_public_key):
+        encrypted_message = client_public_key.encrypt(
+            message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        return encrypted_message
