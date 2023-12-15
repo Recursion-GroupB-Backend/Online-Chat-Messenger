@@ -12,6 +12,15 @@ TCPとUDP通信の役割
 - TCP通信ではチャットの参加・作成に使います
 - UDP通信はユーザー間のメッセージ交換に使われます
 
+# Features
+Online-Chat-Messengerは、以下の機能を備えています：
+
+- チャットルームの作成と管理：ユーザーは自分自身でチャットルームを作成・参加ができます
+- リアルタイムチャット：ユーザーはリアルタイムでメッセージを交換することができます
+- 複数ユーザー対応：複数のユーザーが同時にチャットルームに参加し、コミュニケーションをとることができます。
+- セキュアな通信：TCPとUDPを使用した安全な通信で、ユーザー間のメッセージは暗号化されています。
+- ユーザー認証：チャットルームへのアクセスにはユーザー名、チャットルーム名、パスワードが必要です。
+
 # **Install**
 
 リポジトリをクローンします：
@@ -49,17 +58,18 @@ python -m client.client
 チャットルーム内でメッセージを送受信します。他のユーザーも同じルームに参加していれば、リアルタイムでメッセージのやり取りが可能です。
 通信は暗号化されているので安心してチャットが楽しめます。
 
+
 # Documents
 
-[wiki](https://github.com/Recursion-Group-B/card-game/wiki)
+[wiki](https://github.com/Recursion-Group-B/card-game/wiki](https://github.com/Recursion-GroupB-Backend/Online-Chat-Messenger/wiki))
 
-[要件定義](https://github.com/Recursion-Group-B/card-game/wiki/%E8%A6%81%E4%BB%B6%E5%AE%9A%E7%BE%A9)
+[アクティビティ図](https://github.com/Recursion-GroupB-Backend/Online-Chat-Messenger/wiki#%E3%82%A2%E3%82%AF%E3%83%86%E3%82%A3%E3%83%93%E3%83%86%E3%82%A3%E5%9B%B3)
 
-[規約](https://github.com/Recursion-Group-B/card-game/wiki/%E8%A6%8F%E7%B4%84)
+[シーケンス図](https://github.com/Recursion-GroupB-Backend/Online-Chat-Messenger/wiki#%E3%82%B7%E3%83%BC%E3%82%B1%E3%83%B3%E3%82%B9%E5%9B%B3)
 
-[設計](https://github.com/Recursion-Group-B/card-game/wiki/%E8%A8%AD%E8%A8%88)
+[クラス図](https://github.com/Recursion-GroupB-Backend/Online-Chat-Messenger/wiki#%E3%82%AF%E3%83%A9%E3%82%B9%E5%9B%B3)
 
-[議事録](https://github.com/Recursion-Group-B/card-game/wiki/%E8%AD%B0%E4%BA%8B%E9%8C%B2)
+[議事録](https://github.com/Recursion-GroupB-Backend/dev-log)
 
 
 
