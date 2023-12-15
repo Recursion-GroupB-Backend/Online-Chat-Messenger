@@ -11,5 +11,3 @@ class User:
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.member_type = member_type
         self.public_key = public_key
-
-    # def send_message(self):

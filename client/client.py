@@ -172,20 +172,25 @@ class Client:
         try:
             while True:
                 data, _ = self.udp_client_sock.recvfrom(4096)
+
                 user_name_size, message_size = struct.unpack('!HH', data[:4])
                 encrypted_user_name = data[4: 4 + user_name_size]
+                # 暗号化されたユーザー名とメッセージを復号化
                 encrypted_message = data[4 + user_name_size: 4 + user_name_size + message_size]
 
-                # 暗号化されたユーザー名とメッセージを復号化
                 try:
                     decrypted_user_name = self.decrypt_message(encrypted_user_name).decode('utf-8')
                     decrypted_message = self.decrypt_message(encrypted_message).decode('utf-8')
+                    if "exit" == decrypted_message:
+                        print("The host has closed the chat room.")
+                        self.shutdown()
+                    if decrypted_user_name != self.user_name:
+                        print(f"{decrypted_user_name}：{decrypted_message}")
                 except Exception as e:
                     print(f"Error decrypting message: {e}")
                     continue
 
-                if decrypted_user_name != self.user_name:
-                    print(f"{decrypted_user_name}：{decrypted_message}")
+
 
         except OSError:
             pass
@@ -257,8 +262,8 @@ class Client:
 
 
     def shutdown(self):
-        exit_message = "exit"
-        message_byte = self.udp_message_encode(exit_message)
+        encrypted_exit_message = self.encrypt_message("exit")
+        message_byte = self.udp_message_encode(encrypted_exit_message)
         self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
         print("Client is shutting down.")
         self.udp_client_sock.close()

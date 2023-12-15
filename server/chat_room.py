@@ -55,8 +55,10 @@ class ChatRoom:
             if token == remove_clients.token:
                 if user.member_type == "guest":
                     self.remove_user(remove_clients)
-                # TODO user.member_typeがhostの場合の処理を追加
-                # else:
+                else:
+                    self.broadcast(bytes("exit", 'utf-8'), token, udp_socket)
+                    print(f"{self.room_name} was deleted")
+                    self.remove_user(remove_clients)
                 pass
             else:
                 # 各ユーザーの公開鍵で暗号化
