@@ -9,6 +9,8 @@ from constants.operation import Operation
 from constants.member_type import MemberType
 from server.user import User
 from server.chat_room import ChatRoom
+from cryptography.hazmat.primitives import serialization, asymmetric, hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 
 
@@ -28,6 +30,10 @@ class Server:
         self.clients = {}
         self.rooms = {}
         self.TIMEOUT = 60
+        self.server_public_key = ''
+        self.server_private_key = ''
+
+        self.generate_rsa_key_pair()
 
 
     def start(self):
@@ -56,8 +62,6 @@ class Server:
             # stateを処理中に更新
             state =  1
 
-            # TODO: 受信レスポンスをする場合ここで行う
-
             print("-------- receive request value   -----------")
             print("Room Name:", room_name)
             print("User Name:", user_name)
@@ -68,7 +72,15 @@ class Server:
             print("tcp_address", tcp_address)
             print("-------- receive request value end ---------")
 
-            user = self.create_user(user_name, tcp_address, (payload['ip'], payload['port']), operation)
+            user = self.create_user(
+                user_name,
+                tcp_address,
+                (payload['ip'], payload['port']),
+                operation,
+                payload['public_key']
+            )
+
+            print("ユーザー作成の完了")
 
             operation_response = {}
             if operation == Operation.CREATE_ROOM.value:
@@ -81,20 +93,23 @@ class Server:
             if operation_response["status"] in [200, 201]:
                 state = 2
 
+            public_key_pem = self.encode_pem(self.server_public_key)
+
             # TCPレスポンスを返す
-            self.send_tcp_response(client_socket, operation, state, operation_response, room_name, user.token)
+            self.send_tcp_response(client_socket, operation, state, operation_response, room_name, public_key_pem, user.token)
 
 
         except Exception as e:
             print("Error in receive_tcp_message:", e)
 
-    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name, token = None):
+    def send_tcp_response(self, client_socket, operation, state, operation_response, room_name, public_key_pem, token = None):
         """クライアントにレスポンスを送信する"""
         try:
             payload = {
                 "status": operation_response["status"],
                 "message": operation_response["message"],
-                "token": token
+                "token": token,
+                "public_key": public_key_pem
             }
 
             payload_json = json.dumps(payload)
@@ -132,6 +147,7 @@ class Server:
     def generate_token(self):
         return secrets.token_hex(self.TOKEN_MAX_BITE)
 
+
     def receive_udp_message(self):
         try:
             while True:
@@ -149,24 +165,33 @@ class Server:
                 start += room_name_size
                 token = data[start:start + token_size].decode('utf-8')
                 start += token_size
-                message = data[start:].decode('utf-8')
+                encrypted_message = data[start:]
+
+                # 暗号化されたメッセージを復号化
+                try:
+                    decrypted_message = self.decrypt_message(encrypted_message)
+
+                except Exception as e:
+                    print(f"Error decrypting message: {e}")
+                    continue
+
+                # デバッグログ
+                print(f"room name: {room_name}, token: {token}, message: {decrypted_message}")
 
                 # userが退出した時の処理
+
                 room = self.rooms[room_name]
-                if message == "exit":
+                if decrypted_message == "exit":
                     room.broadcast_remove_message(room.users[token], self.udp_socket)
                     pass
                 else:
-                    # デバッグログ
-                    print(f"room name: {room_name}, token: {token}, message: {message}")
                     if not self.valid_user(token, address, room_name):
                         raise Exception("Invalid user or token mismatch")
 
                     # last_activeの更新処理
                     user = room.users[token]
                     user.last_active = time.time()
-                    print(user.last_active)
-                    room.broadcast(message, token, self.udp_socket)
+                    room.broadcast(decrypted_message, token, self.udp_socket)
 
 
         except Exception as e:
@@ -201,18 +226,19 @@ class Server:
         else:
             return {"status": 400, "message": "Chat room already exists."}
 
-    # chatroom削除の処理
+
     def delete_room(self, room_name):
         if room_name in self.rooms:
             del self.rooms[room_name]
 
-    def create_user(self, user_name, tcp_address, udp_address, operation):
+    def create_user(self, user_name, tcp_address, udp_address, operation, public_key_pem):
         return User(
             user_name,
             tcp_address,
             udp_address,
             self.generate_token(),
-            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value
+            MemberType.HOST.value if operation == Operation.CREATE_ROOM.value else MemberType.GUEST.value,
+            serialization.load_pem_public_key(public_key_pem.encode('utf-8'))
         )
 
     def join_room(self, user, room_name, password):
@@ -249,6 +275,30 @@ class Server:
         if not re.search("[a-zA-Z]", password):
             return "Password must contain at least one letter."
         return None
+
+    def generate_rsa_key_pair(self):
+        self.server_private_key = asymmetric.rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=2048
+        )
+
+        self.server_public_key = self.server_private_key.public_key()
+
+    def encode_pem(self, server_public_key):
+        return server_public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+        ).decode('utf-8')
+
+    def decrypt_message(self, encrypted_message):
+        return self.server_private_key.decrypt(
+            encrypted_message,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
 
     def shutdown(self):
         print("Server is shutting down.")
