@@ -157,7 +157,7 @@ class Client:
             print('socket closing....')
             self.udp_client_sock.close()
 
-    def udp_message_encode(self, message_byte:str):
+    def udp_message_encode(self, message_byte:bytes):
         # ヘッダー[2BYTE] + ボディ[ルーム名 + トークン + メッセージ]
         header = struct.pack('!B B', len(self.room_name), len(self.token))
 
@@ -222,6 +222,10 @@ class Client:
             password = input('Enter Password: ')
             if len(password) < 6:
                 print("Password must be at least 6 characters long.")
+            elif not any(char.isdigit() for char in password):
+                print("Password must contain at least one digit.")
+            elif not any(char.isalpha() for char in password):
+                print("Password must contain at least one letter.")
             else:
                 return password
 
