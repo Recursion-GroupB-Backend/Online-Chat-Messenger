@@ -181,7 +181,7 @@ class Server:
                 # userが退出した時の処理
 
                 room = self.rooms[room_name]
-                if decrypted_message == "exit":
+                if decrypted_message.decode("utf-8") == "exit":
                     room.broadcast_remove_message(room.users[token], self.udp_socket)
                     pass
                 else:

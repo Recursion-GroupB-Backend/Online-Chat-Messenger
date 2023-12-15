@@ -54,11 +54,9 @@ class ChatRoom:
         for token, user in list(self.users.items()):
             if token == remove_clients.token:
                 if user.member_type == "guest":
-                    print("############guest################")
                     self.remove_user(remove_clients)
                 else:
-                    print("############host################")
-                    self.broadcast("exit", token, udp_socket)
+                    self.broadcast(bytes("exit", 'utf-8'), token, udp_socket)
                     print(f"{self.room_name} was deleted")
                     self.remove_user(remove_clients)
                 pass
