@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives import serialization, asymmetric, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 
 class ChatRoom:
-    TIME_OUT = 20
+    TIME_OUT = 60
 
     def __init__(self, room_name, password):
         self.room_name = room_name

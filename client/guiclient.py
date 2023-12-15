@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import scrolledtext
 from constants.operation import Operation
 from .client import Client
+import struct
 
 class GuiClient(Client):
     NAME_SIZE = 255
@@ -16,7 +17,7 @@ class GuiClient(Client):
         # 最初のウィンドウのセットアップ
         self.root = tk.Tk()
         self.root.title("Chat App")
-        self.root.geometry("500x500+500+50") # 横幅x高さ+X座標+Y座標
+        self.root.geometry("500x500") # 横幅x高さ+X座標+Y座標
 
         # ユーザー名入力フィールド
         tk.Label(self.root, text="User Name").pack(padx=10, pady=5)
@@ -27,7 +28,12 @@ class GuiClient(Client):
         tk.Label(self.root, text="Chat Room Name").pack(padx=10, pady=5)
         self.room_name_entry = tk.Entry(self.root)
         self.room_name_entry.pack(padx=10, pady=5)
-
+        
+        # パスワード
+        tk.Label(self.root, text="Chat Room PassWord").pack(padx=10, pady=5)
+        self.room_password_entry = tk.Entry(self.root)
+        self.room_password_entry.pack(padx=10, pady=5)
+        
         # チャットルーム入力確認ボタン
         enter_room_button = tk.Button(self.root, text="'CREATE' Chat Room", command=lambda: self.show_chat_window(Operation.CREATE_ROOM.value))
         enter_room_button.pack(pady=20)
@@ -41,21 +47,24 @@ class GuiClient(Client):
         operation_payload = {
             "user_name":self.user_name,
             "ip": self.udp_client_address[0],
-            "port": self.udp_client_address[1]
+            "port": self.udp_client_address[1],
+            "password": self.password,
+            "public_key": self.encode_pem(self.client_public_key)
         }
         return self.create_tcp_protocol(operation_payload)
 
     def udp_send_message_tkinter(self,event=None):
-        # トークンを使ったUDPでの送信処理
         # Shiftキーが押されている場合は改行を許可
         if event and event.state == 0x0001:  # Shiftキーの状態は state == 0x0001
             return
         message = self.message_entry.get("1.0", tk.END).strip()  # 入力されたメッセージを取得
-        if (2 + len(self.room_name) + len(self.token) + len(message.encode()) > GuiClient.BUFFER_SIZE):
+
+        encrypted_message = self.encrypt_message(message)
+        if (2 + len(self.room_name) + len(self.token) + len(encrypted_message) > GuiClient.BUFFER_SIZE):
             print(f'Messeges must be equal to or less than {GuiClient.BUFFER_SIZE} bytes')
         try:
-            message_byte = self.udp_message_encode(message)
-            self.udp_client_sock.sendto(message_byte, (self.server_address, self.udp_server_port))
+            encrypted_message_byte = self.udp_message_encode(encrypted_message)
+            self.udp_client_sock.sendto(encrypted_message_byte, (self.server_address, self.udp_server_port))
         except Exception as e:
             print(f"Error sending message: {e}")
         if message:  # メッセージが空でない場合
@@ -68,6 +77,7 @@ class GuiClient(Client):
     def show_chat_window(self,operation):
         self.user_name = self.username_entry.get()
         self.room_name = self.room_name_entry.get()
+        self.password = self.room_password_entry.get()
         self.operation_code = operation
         self.tcp_connect_server()
         
@@ -80,9 +90,9 @@ class GuiClient(Client):
         
         # チャットウィンドウのセットアップ
         self.chat_window = tk.Toplevel(self.root)
-        self.chat_window.title(f"Chat room - '{self.room_name}'")
+        self.chat_window.title(f"'{self.user_name}' in Chat room - '{self.room_name}' ")
         # ウィンドウのサイズと位置を設定        
-        self.chat_window.geometry("600x800+500+50") # 横幅x高さ+X座標+Y座標
+        self.chat_window.geometry("600x800") # 横幅x高さ+X座標+Y座標
         
         # スクロール可能なテキストエリア（表示エリア）
         self.display_area = scrolledtext.ScrolledText(self.chat_window, state='disabled', height=30)
@@ -106,33 +116,40 @@ class GuiClient(Client):
         try:
             while True:
                 data, _ = self.udp_client_sock.recvfrom(4096)
-                user_name_size = data[0]
-                message_size = data[1]
-                user_name = data[2: 2 + user_name_size]
-                message = data[2 + user_name_size:]
-                
-                if (message) and (user_name.decode('utf-8') != self.user_name):
-                    self.display_area.configure(state='normal')                             # テキストエリアを編集可能に
-                    self.display_area.insert(tk.END, user_name.decode('utf-8') + ":" + message.decode('utf-8') + "\n")        # メッセージを表示エリアに追加
-                    self.display_area.configure(state='disabled')                           # テキストエリアを編集不可に
-                    
-                    print(f"{user_name.decode('utf-8')}：{message.decode('utf-8')}")
+
+                user_name_size, message_size = struct.unpack('!HH', data[:4])
+                encrypted_user_name = data[4: 4 + user_name_size]
+                # 暗号化されたユーザー名とメッセージを復号化
+                encrypted_message = data[4 + user_name_size: 4 + user_name_size + message_size]
+
+                try:
+                    decrypted_user_name = self.decrypt_message(encrypted_user_name).decode('utf-8')
+                    decrypted_message = self.decrypt_message(encrypted_message).decode('utf-8')
+                    if (decrypted_message) and (decrypted_user_name != self.user_name):
+                        self.display_area.configure(state='normal')                                                   # テキストエリアを編集可能に
+                        self.display_area.insert(tk.END, decrypted_user_name + ":" + decrypted_message + "\n")        # メッセージを表示エリアに追加
+                        self.display_area.configure(state='disabled')                                                 # テキストエリアを編集不可に
+                    if "exit" == decrypted_message:
+                        print("The host has closed the chat room.")
+                        self.chat_window.destroy()
+                        self.root.destroy()
+                        self.shutdown()
+                    if decrypted_user_name != self.user_name:
+                        print(f"{decrypted_user_name}：{decrypted_message}")
+                except Exception as e:
+                    print(f"Error decrypting message: {e}")
+                    continue
+
+        except OSError:
+            self.chat_window.destroy()
+            self.root.destroy()
+            self.shutdown()
         finally:
             print('socket closing')
             self.udp_client_sock.close()
     
     def on_closing(self):
-        # 最初のウィンドウを再表示
-        self.root.deiconify()
-        self.chat_window.destroy()
-
-    def shutdown(self):
-        print("Client is shutting down.")
-        self.tcp_client_sock.close()
-        self.udp_client_sock.close()
-        self.chat_window.destroy()
-        self.chat_window.destroy()
-        self.root.destroy()
+        self.shutdown()
 
 if __name__ == "__main__":
     gui_client = GuiClient()
